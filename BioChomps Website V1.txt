@@ -1,0 +1,2046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BioChomps - Mad Science Terminal</title>
+    <style>
+        @font-face {
+            font-family: 'VT323';
+            src: url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/webfonts/fa-solid-900.woff2') format('woff2');
+            font-style: normal;
+            font-weight: 400;
+        }
+        
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'VT323', 'Courier New', monospace;
+            color: #33ff33;
+            line-height: 1.4;
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="16" viewBox="0 0 12 16"><rect x="0" y="0" width="8" height="16" fill="%2333ff33"/></svg>') 0 0, auto;
+        }
+        
+        .terminal-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(51, 255, 51, 0.03) 50%,
+                rgba(0, 0, 0, 0.1) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+            animation: scanline 10s linear infinite;
+        }
+        
+        .horizontal-scanline {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background-color: rgba(51, 255, 51, 0.3);
+            opacity: 0.7;
+            box-shadow: 0 0 5px rgba(51, 255, 51, 0.5);
+            z-index: 11;
+            animation: horizontalScan 8s linear infinite;
+            pointer-events: none;
+        }
+        
+        .crt-effect {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.2) 80%, rgba(0, 0, 0, 0.4) 100%);
+            pointer-events: none;
+            z-index: 12;
+        }
+        
+        .terminal-content {
+            height: calc(100% - 40px);
+            overflow-y: auto;
+            padding-right: 10px;
+            position: relative;
+            z-index: 2;
+            scrollbar-width: thin;
+            scrollbar-color: #33ff33 #000;
+        }
+        
+        .terminal-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .terminal-content::-webkit-scrollbar-track {
+            background: #000; 
+        }
+        
+        .terminal-content::-webkit-scrollbar-thumb {
+            background: #33ff33; 
+        }
+        
+        .input-line {
+            display: flex;
+            margin-top: 20px;
+        }
+        
+        .prompt {
+            color: #33ff33;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        
+        .user-input {
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            color: #33ff33;
+            font-family: 'VT323', 'Courier New', monospace;
+            font-size: 1em;
+            caret-color: #33ff33;
+            outline: none;
+        }
+        
+        .game-header {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .ascii-art {
+            white-space: pre;
+            line-height: 1.2;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #000;
+            border-top: 1px solid #33ff33;
+            padding: 5px 20px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9em;
+            z-index: 5;
+        }
+        
+        .game-phase {
+            display: none;
+        }
+        
+        .game-phase.active {
+            display: block;
+        }
+        
+        .button {
+            background-color: #000;
+            color: #33ff33;
+            border: 1px solid #33ff33;
+            padding: 5px 10px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: 'VT323', 'Courier New', monospace;
+        }
+        
+        .button:hover {
+            background-color: #33ff33;
+            color: #000;
+        }
+        
+        .flicker {
+            animation: textFlicker 5s infinite;
+        }
+        
+        .gameitem {
+            border: 1px solid #33ff33;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .part-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 10px;
+        }
+        
+        @keyframes textFlicker {
+            0% { opacity: 1; }
+            92% { opacity: 1; }
+            93% { opacity: 0.3; }
+            94% { opacity: 1; }
+            97% { opacity: 0.5; }
+            98% { opacity: 1; }
+            100% { opacity: 1; }
+        }
+        
+        @keyframes scanline {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 100%; }
+        }
+        
+        @keyframes horizontalScan {
+            0% { top: -10%; left: -100%; }
+            60% { top: 110%; left: 100%; }
+            61% { top: -10%; left: -100%; }
+            100% { top: -10%; left: -100%; }
+        }
+        
+        /* Screen startup animation */
+        .terminal-container::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            z-index: 100;
+            animation: startup 2s ease-out forwards;
+        }
+        
+        @keyframes startup {
+            0% { height: 100%; }
+            90% { height: 5px; }
+            100% { height: 0; }
+        }
+        
+        /* Different screen phases styling */
+        .science-phase .terminal-content {
+            background: linear-gradient(rgba(0, 20, 0, 0.2), rgba(0, 15, 0, 0.1));
+        }
+        
+        .download-phase .terminal-content {
+            background: linear-gradient(rgba(0, 20, 20, 0.2), rgba(0, 15, 0, 0.1));
+        }
+        
+        .mission-phase .terminal-content {
+            background: linear-gradient(rgba(20, 20, 0, 0.2), rgba(0, 15, 0, 0.1));
+        }
+        
+        .battle-mode .terminal-content {
+            background: linear-gradient(rgba(20, 0, 0, 0.2), rgba(0, 15, 0, 0.1));
+        }
+        
+        /* Battle styling */
+        .battle-arena {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .battle-creatures {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+        }
+        
+        .battle-creature {
+            text-align: center;
+            width: 45%;
+        }
+        
+        .health-bar {
+            height: 20px;
+            border: 1px solid #33ff33;
+            margin: 10px 0;
+            position: relative;
+        }
+        
+        .health-bar-fill {
+            height: 100%;
+            background-color: #33ff33;
+            transition: width 0.5s ease-in-out;
+        }
+        
+        .battle-log {
+            border: 1px solid #33ff33;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        
+        .ability-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        /* Lab-Crawl styling */
+        .lab-crawl-narrative {
+            border: 1px solid #33ff33;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .lab-crawl-choices {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        /* Part styling */
+        .part-item {
+            border: 1px solid #33ff33;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .part-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        
+        .part-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+        }
+        
+        .part-actions {
+            margin-top: 10px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        
+        /* Rarity colors */
+        .rarity-BASIC {
+            color: #33ff33;
+        }
+        
+        .rarity-ADVANCED {
+            color: #3399ff;
+        }
+        
+        .rarity-ELITE {
+            color: #ff33ff;
+        }
+        
+        /* Subscription banner */
+        .subscription-banner {
+            border: 1px solid #ff33ff;
+            background-color: rgba(255, 51, 255, 0.1);
+            padding: 10px;
+            margin: 10px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal-container">
+        <div class="scanlines"></div>
+        <div class="horizontal-scanline"></div>
+        <div class="crt-effect"></div>
+        
+        <div class="terminal-content">
+            <div class="game-header flicker">
+                <div class="ascii-art">
+                    ██████╗ ██╗ ██████╗  ██████╗██╗  ██╗ ██████╗ ███╗   ███╗██████╗ ███████╗
+                    ██╔══██╗██║██╔═══██╗██╔════╝██║  ██║██╔═══██╗████╗ ████║██╔══██╗██╔════╝
+                    ██████╔╝██║██║   ██║██║     ███████║██║   ██║██╔████╔██║██████╔╝███████╗
+                    ██╔══██╗██║██║   ██║██║     ██╔══██║██║   ██║██║╚██╔╝██║██╔═══╝ ╚════██║
+                    ██████╔╝██║╚██████╔╝╚██████╗██║  ██║╚██████╔╝██║ ╚═╝ ██║██║     ███████║
+                    ╚═════╝ ╚═╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚══════╝
+                </div>
+                <p>MAD SCIENCE TERMINAL v3.14159</p>
+                <p>SYSTEM BOOTUP... COMPLETE</p>
+                <p>WELCOME TO THE LABORATORY, MAD SCIENTIST!</p>
+            </div>
+            
+            <div id="output"></div>
+            
+            <!-- Start Screen -->
+            <div id="start-screen" class="game-phase active">
+                <p>INITIALIZING BIOCHOMPS PROTOCOL...</p>
+                <p>CREATE YOUR MAD SCIENTIST IDENTITY TO BEGIN:</p>
+                <div class="input-line">
+                    <span class="prompt">NAME:</span>
+                    <input type="text" id="scientist-name" class="user-input" placeholder="Enter your mad scientist name">
+                </div>
+                <div style="margin-top: 20px; text-align: center;">
+                    <button onclick="startGame()" class="button">BEGIN EXPERIMENTATION</button>
+                </div>
+            </div>
+            
+            <!-- Science Phase -->
+            <div id="science-phase" class="game-phase">
+                <div class="ascii-art">
+                    ╔═══════════════════════════════════════════╗
+                    ║               SCIENCE LAB                 ║
+                    ╚═══════════════════════════════════════════╝
+                </div>
+                <p>The Science Machine whirs eagerly, awaiting your commands! Bubbling beakers and electrical sparks fill the laboratory as your creation awaits modification.</p>
+                
+                <div id="current-creature">
+                    <h3>CURRENT CREATION:</h3>
+                    <div id="creature-details" class="gameitem">No creature created yet. Use the CREATE command to assemble one!</div>
+                </div>
+                
+                <div id="inventory">
+                    <h3>AVAILABLE PARTS:</h3>
+                    <div id="parts-inventory" class="part-list">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <button onclick="switchPhase('download')" class="button">DOWNLOAD NEW PARTS</button>
+                    <button onclick="switchPhase('mission')" class="button">MISSION SELECT</button>
+                    <button onclick="startLabCrawl()" class="button">LAB-CRAWL EXPLORATION</button>
+                </div>
+            </div>
+            
+            <!-- Download Phase -->
+            <div id="download-phase" class="game-phase">
+                <div class="ascii-art">
+                    ╔═══════════════════════════════════════════╗
+                    ║              DOWNLOAD NEXUS               ║
+                    ╚═══════════════════════════════════════════╝
+                </div>
+                <p>Welcome to the Download Nexus, where bits and bytes transform into biological components! Spend your hard-earned AnimalBytes to acquire new parts for your creations.</p>
+                
+                <div class="subscription-banner">
+                    <p>⚠️ UPGRADE YOUR SUBSCRIPTION TO UNLOCK ADVANCED AND ELITE PARTS! ⚠️</p>
+                    <button onclick="showSubscriptionOptions()" class="button">VIEW SUBSCRIPTION OPTIONS</button>
+                </div>
+                
+                <div id="animal-bytes-display">
+                    <h3>AVAILABLE ANIMAL BYTES: <span id="animal-bytes-count">500</span></h3>
+                </div>
+                
+                <div id="part-filters">
+                    <h3>FILTER PARTS:</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+                        <button onclick="filterParts('all')" class="button">ALL</button>
+                        <button onclick="filterParts('HEAD')" class="button">HEADS</button>
+                        <button onclick="filterParts('CHEST')" class="button">CHESTS</button>
+                        <button onclick="filterParts('ARMS')" class="button">ARMS</button>
+                        <button onclick="filterParts('LEGS')" class="button">LEGS</button>
+                        <button onclick="filterParts('TAIL')" class="button">TAILS</button>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        <button onclick="filterRarity('all')" class="button">ALL RARITIES</button>
+                        <button onclick="filterRarity('BASIC')" class="button rarity-BASIC">BASIC</button>
+                        <button onclick="filterRarity('ADVANCED')" class="button rarity-ADVANCED">ADVANCED</button>
+                        <button onclick="filterRarity('ELITE')" class="button rarity-ELITE">ELITE</button>
+                    </div>
+                </div>
+                
+                <div id="parts-shop">
+                    <h3>AVAILABLE PARTS:</h3>
+                    <div id="parts-list" class="part-list">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <button onclick="switchPhase('science')" class="button">RETURN TO SCIENCE LAB</button>
+                    <button onclick="refreshPartShop()" class="button">REFRESH SELECTION</button>
+                </div>
+            </div>
+            
+            <!-- Mission Phase -->
+            <div id="mission-phase" class="game-phase">
+                <div class="ascii-art">
+                    ╔═══════════════════════════════════════════╗
+                    ║              MISSION SELECT               ║
+                    ╚═══════════════════════════════════════════╝
+                </div>
+                <p>Select a mission to test your creation's abilities! Each mission will challenge your creature's unique combination of parts and abilities.</p>
+                
+                <div id="mission-list">
+                    <h3>AVAILABLE MISSIONS:</h3>
+                    <div class="gameitem">
+                        <h4>JUNGLE EXPEDITION</h4>
+                        <p>Environment: Jungle</p>
+                        <p>Challenge Level: Easy</p>
+                        <p>Reward: 100 AnimalBytes</p>
+                        <div class="part-actions">
+                            <button onclick="startMission('jungle')" class="button">START MISSION</button>
+                        </div>
+                    </div>
+                    
+                    <div class="gameitem">
+                        <h4>ARCTIC SURVIVAL</h4>
+                        <p>Environment: Ice</p>
+                        <p>Challenge Level: Medium</p>
+                        <p>Reward: 200 AnimalBytes</p>
+                        <div class="part-actions">
+                            <button onclick="startMission('arctic')" class="button">START MISSION</button>
+                        </div>
+                    </div>
+                    
+                    <div class="gameitem">
+                        <h4>DESERT SHOWDOWN</h4>
+                        <p>Environment: Desert</p>
+                        <p>Challenge Level: Hard</p>
+                        <p>Reward: 300 AnimalBytes</p>
+                        <div class="part-actions">
+                            <button onclick="startMission('desert')" class="button">START MISSION</button>
+                        </div>
+                    </div>
+                    
+                    <div class="gameitem">
+                        <h4 class="rarity-ELITE">VOLCANO CORE</h4>
+                        <p>Environment: Volcano</p>
+                        <p>Challenge Level: Expert</p>
+                        <p>Reward: 500 AnimalBytes + Rare Part</p>
+                        <p class="rarity-ELITE">⚠️ MAD SCIENTIST SUBSCRIPTION REQUIRED ⚠️</p>
+                        <div class="part-actions">
+                            <button onclick="startMission('volcano')" class="button">START MISSION</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <button onclick="switchPhase('science')" class="button">RETURN TO SCIENCE LAB</button>
+                </div>
+            </div>
+            
+            <!-- Battle Phase -->
+            <div id="battle-phase" class="game-phase">
+                <div class="ascii-art">
+                    ╔═══════════════════════════════════════════╗
+                    ║               BATTLE ARENA                ║
+                    ╚═══════════════════════════════════════════╝
+                </div>
+                <p>Your creation faces off against a wild challenger! Use your creature's abilities wisely to emerge victorious.</p>
+                
+                <div class="battle-arena">
+                    <div id="battle-environment">
+                        <h3>ENVIRONMENT: <span id="current-environment">Jungle</span></h3>
+                    </div>
+                    
+                    <div class="battle-creatures">
+                        <div class="battle-creature">
+                            <h3>YOUR CREATION</h3>
+                            <div id="player-creature-ascii" class="ascii-art">
+                                /\___/\
+                                |     |
+                                |     |
+                                |_____| 
+                            </div>
+                            <div id="player-creature-name">BIOMUTANT</div>
+                            <div class="health-bar">
+                                <div id="player-health-bar" class="health-bar-fill" style="width: 100%;"></div>
+                            </div>
+                            <div id="player-health">HP: 100/100</div>
+                        </div>
+                        
+                        <div class="battle-creature">
+                            <h3>OPPONENT</h3>
+                            <div id="enemy-creature-ascii" class="ascii-art">
+                                /\___/\
+                                |o   o|
+                                |  ^  |
+                                |_____| 
+                            </div>
+                            <div id="enemy-creature-name">WILD BEAST</div>
+                            <div class="health-bar">
+                                <div id="enemy-health-bar" class="health-bar-fill" style="width: 100%;"></div>
+                            </div>
+                            <div id="enemy-health">HP: 100/100</div>
+                        </div>
+                    </div>
+                    
+                    <div class="battle-log">
+                        <p>BATTLE INITIATED!</p>
+                        <p>Your creation eyes the opponent warily...</p>
+                    </div>
+                    
+                    <div class="ability-buttons">
+                        <button onclick="useAbility('bite')" class="button">BITE ATTACK</button>
+                        <button onclick="useAbility('claw')" class="button">CLAW SLASH</button>
+                        <button onclick="useAbility('roar')" class="button">INTIMIDATING ROAR</button>
+                        <button onclick="useAbility('heal')" class="button">REGENERATE</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Lab-Crawl Phase -->
+            <div id="lab-crawl-phase" class="game-phase">
+                <div class="ascii-art">
+                    ╔═══════════════════════════════════════════╗
+                    ║               LAB-CRAWL                   ║
+                    ╚═══════════════════════════════════════════╝
+                </div>
+                <p>Explore the abandoned sections of the laboratory where failed experiments roam free. Search for rare parts and uncover the secrets of the mad scientists who came before you.</p>
+                
+                <div id="lab-crawl-container">
+                    <div class="lab-crawl-narrative">
+                        <p>You enter the dark hallway of the abandoned laboratory. The air is thick with the smell of chemicals and decay. Flickering lights cast eerie shadows on the walls.</p>
+                        <p>A strange noise echoes from deeper within the facility. What will you do?</p>
+                    </div>
+                    
+                    <div class="lab-crawl-choices">
+                        <button onclick="labCrawlChoice('investigate')" class="button">INVESTIGATE THE NOISE</button>
+                        <button onclick="labCrawlChoice('search')" class="button">SEARCH THE NEARBY ROOM</button>
+                        <button onclick="labCrawlChoice('retreat')" class="button">RETREAT TO SAFETY</button>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; display: none;" id="lab-crawl-end">
+                    <button onclick="switchPhase('science')" class="button">RETURN TO SCIENCE LAB</button>
+                </div>
+            </div>
+            
+            <!-- Subscription Modal -->
+            <div id="subscription-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #000; border: 2px solid #33ff33; padding: 20px; z-index: 1000; width: 80%; max-width: 600px;">
+                <h2 style="text-align: center;">UPGRADE YOUR MAD SCIENCE CAPABILITIES</h2>
+                
+                <div class="gameitem">
+                    <h3>FREE TIER (CURRENT)</h3>
+                    <p>• Limited access to BASIC parts</p>
+                    <p>• Daily AnimalBytes cap: 1000</p>
+                    <p>• Basic missions only</p>
+                    <p>• Save only one creature</p>
+                    <p>PRICE: FREE</p>
+                </div>
+                
+                <div class="gameitem">
+                    <h3 class="rarity-ADVANCED">SCIENTIST TIER</h3>
+                    <p>• Full access to BASIC and ADVANCED parts</p>
+                    <p>• Increased AnimalBytes earning rate (2x)</p>
+                    <p>• All standard missions</p>
+                    <p>• Save up to 5 creatures</p>
+                    <p>PRICE: $5.99/month</p>
+                    <div style="text-align: center;">
+                        <button onclick="upgradeSubscription('scientist')" class="button">UPGRADE NOW</button>
+                    </div>
+                </div>
+                
+                <div class="gameitem">
+                    <h3 class="rarity-ELITE">MAD SCIENTIST TIER</h3>
+                    <p>• Full access to all part rarities including ELITE</p>
+                    <p>• Premium Lab-Crawl adventures</p>
+                    <p>• Special weekly missions</p>
+                    <p>• Custom creature colorization</p>
+                    <p>• Unlimited creature saves</p>
+                    <p>PRICE: $12.99/month</p>
+                    <div style="text-align: center;">
+                        <button onclick="upgradeSubscription('madScientist')" class="button">UPGRADE NOW</button>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="closeSubscriptionModal()" class="button">CLOSE</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="input-line">
+            <span class="prompt">></span>
+            <input type="text" id="command-input" class="user-input" placeholder="Enter command..." onkeypress="handleCommandInput(event)">
+        </div>
+        
+        <div class="status-bar">
+            <div>PHASE: <span id="current-phase">INITIALIZING</span></div>
+            <div>ANIMAL BYTES: <span id="status-bytes">500</span></div>
+            <div>CREATURE: <span id="status-creature">NONE</span></div>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        const gameState = {
+            scientistName: '',
+            animalBytes: 500,
+            currentPhase: 'start',
+            currentCreature: null,
+            inventory: [],
+            subscription: 'free',
+            battleState: null,
+            labCrawlState: null
+        };
+        
+        // Available parts data
+        const availableParts = [
+            {
+                partId: 'head_lion',
+                name: 'Lion Head',
+                type: 'HEAD',
+                rarity: 'BASIC',
+                stats: { strength: 6, intelligence: 4, defense: 5 },
+                abilities: ['Roar', 'Bite'],
+                environment: 'Jungle',
+                cost: 100,
+                emoji: '🦁'
+            },
+            {
+                partId: 'head_eagle',
+                name: 'Eagle Head',
+                type: 'HEAD',
+                rarity: 'BASIC',
+                stats: { strength: 4, intelligence: 7, defense: 3 },
+                abilities: ['Keen Sight', 'Peck'],
+                environment: 'Mountain',
+                cost: 100,
+                emoji: '🦅'
+            },
+            {
+                partId: 'head_shark',
+                name: 'Shark Head',
+                type: 'HEAD',
+                rarity: 'ADVANCED',
+                stats: { strength: 8, intelligence: 3, defense: 6 },
+                abilities: ['Powerful Bite', 'Water Sense'],
+                environment: 'Ocean',
+                cost: 200,
+                emoji: '🦈'
+            },
+            {
+                partId: 'chest_gorilla',
+                name: 'Gorilla Chest',
+                type: 'CHEST',
+                rarity: 'BASIC',
+                stats: { strength: 8, intelligence: 5, defense: 7 },
+                abilities: ['Pound Chest', 'Strength'],
+                environment: 'Jungle',
+                cost: 100,
+                emoji: '🦍'
+            },
+            {
+                partId: 'chest_turtle',
+                name: 'Turtle Shell',
+                type: 'CHEST',
+                rarity: 'BASIC',
+                stats: { strength: 3, intelligence: 4, defense: 9 },
+                abilities: ['Shell Defense', 'Withdraw'],
+                environment: 'Ocean',
+                cost: 100,
+                emoji: '🐢'
+            },
+            {
+                partId: 'chest_bear',
+                name: 'Bear Chest',
+                type: 'CHEST',
+                rarity: 'ADVANCED',
+                stats: { strength: 9, intelligence: 5, defense: 7 },
+                abilities: ['Maul', 'Intimidate'],
+                environment: 'Forest',
+                cost: 200,
+                emoji: '🐻'
+            },
+            {
+                partId: 'arms_octopus',
+                name: 'Octopus Arms',
+                type: 'ARMS',
+                rarity: 'BASIC',
+                stats: { strength: 5, intelligence: 8, defense: 4 },
+                abilities: ['Grab', 'Multiple Strike'],
+                environment: 'Ocean',
+                cost: 100,
+                emoji: '🐙'
+            },
+            {
+                partId: 'arms_mantis',
+                name: 'Mantis Arms',
+                type: 'ARMS',
+                rarity: 'ADVANCED',
+                stats: { strength: 7, intelligence: 6, defense: 4 },
+                abilities: ['Slice', 'Quick Strike'],
+                environment: 'Jungle',
+                cost: 200,
+                emoji: '🦗'
+            },
+            {
+                partId: 'arms_crab',
+                name: 'Crab Claws',
+                type: 'ARMS',
+                rarity: 'ELITE',
+                stats: { strength: 8, intelligence: 4, defense: 9 },
+                abilities: ['Pincer Attack', 'Armor Break'],
+                environment: 'Beach',
+                cost: 350,
+                emoji: '🦀'
+            },
+            {
+                partId: 'legs_cheetah',
+                name: 'Cheetah Legs',
+                type: 'LEGS',
+                rarity: 'BASIC',
+                stats: { strength: 5, intelligence: 4, defense: 3 },
+                abilities: ['Sprint', 'Pounce'],
+                environment: 'Savanna',
+                cost: 100,
+                emoji: '🐆'
+            },
+            {
+                partId: 'legs_kangaroo',
+                name: 'Kangaroo Legs',
+                type: 'LEGS',
+                rarity: 'ADVANCED',
+                stats: { strength: 7, intelligence: 4, defense: 4 },
+                abilities: ['Jump', 'Kick'],
+                environment: 'Savanna',
+                cost: 200,
+                emoji: '🦘'
+            },
+            {
+                partId: 'legs_spider',
+                name: 'Spider Legs',
+                type: 'LEGS',
+                rarity: 'ELITE',
+                stats: { strength: 4, intelligence: 7, defense: 5 },
+                abilities: ['Wall Climb', 'Web Trap'],
+                environment: 'Forest',
+                cost: 350,
+                emoji: '🕷️'
+            },
+            {
+                partId: 'tail_scorpion',
+                name: 'Scorpion Tail',
+                type: 'TAIL',
+                rarity: 'BASIC',
+                stats: { strength: 7, intelligence: 3, defense: 5 },
+                abilities: ['Sting', 'Poison'],
+                environment: 'Desert',
+                cost: 100,
+                emoji: '🦂'
+            },
+            {
+                partId: 'tail_peacock',
+                name: 'Peacock Tail',
+                type: 'TAIL',
+                rarity: 'ADVANCED',
+                stats: { strength: 2, intelligence: 6, defense: 3 },
+                abilities: ['Display', 'Distract'],
+                environment: 'Forest',
+                cost: 200,
+                emoji: '🦚'
+            },
+            {
+                partId: 'tail_dragon',
+                name: 'Dragon Tail',
+                type: 'TAIL',
+                rarity: 'ELITE',
+                stats: { strength: 9, intelligence: 8, defense: 7 },
+                abilities: ['Tail Swipe', 'Fire Breath'],
+                environment: 'Volcano',
+                cost: 500,
+                emoji: '🐲'
+            }
+        ];
+        
+        // Game initialization
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize game state
+            updateStatusBar();
+            loadInventory();
+        });
+        
+        // Game phase management
+        function switchPhase(phase) {
+            // Hide all phases
+            document.querySelectorAll('.game-phase').forEach(element => {
+                element.classList.remove('active');
+            });
+            
+            // Show the selected phase
+            switch(phase) {
+                case 'start':
+                    document.getElementById('start-screen').classList.add('active');
+                    gameState.currentPhase = 'start';
+                    break;
+                case 'science':
+                    document.getElementById('science-phase').classList.add('active');
+                    gameState.currentPhase = 'science';
+                    updateCreatureDisplay();
+                    updateInventoryDisplay();
+                    break;
+                case 'download':
+                    document.getElementById('download-phase').classList.add('active');
+                    gameState.currentPhase = 'download';
+                    updatePartShop();
+                    break;
+                case 'mission':
+                    document.getElementById('mission-phase').classList.add('active');
+                    gameState.currentPhase = 'mission';
+                    break;
+                case 'battle':
+                    document.getElementById('battle-phase').classList.add('active');
+                    gameState.currentPhase = 'battle';
+                    break;
+                case 'lab-crawl':
+                    document.getElementById('lab-crawl-phase').classList.add('active');
+                    gameState.currentPhase = 'lab-crawl';
+                    break;
+            }
+            
+            updateStatusBar();
+        }
+        
+        // Start game function
+        function startGame() {
+            const scientistName = document.getElementById('scientist-name').value;
+            if (scientistName.trim() === '') {
+                alert('Please enter a scientist name!');
+                return;
+            }
+            
+            gameState.scientistName = scientistName;
+            
+            // Add some starter parts to inventory
+            gameState.inventory.push(
+                availableParts.find(part => part.partId === 'head_lion'),
+                availableParts.find(part => part.partId === 'chest_gorilla'),
+                availableParts.find(part => part.partId === 'arms_octopus'),
+                availableParts.find(part => part.partId === 'legs_cheetah'),
+                availableParts.find(part => part.partId === 'tail_scorpion')
+            );
+            
+            switchPhase('science');
+            
+            displayOutput(`Welcome, ${scientistName}! Your laboratory is ready. You have been provided with some basic animal parts to begin your experiments.`);
+        }
+        
+        // Update status bar
+        function updateStatusBar() {
+            document.getElementById('current-phase').textContent = gameState.currentPhase.toUpperCase();
+            document.getElementById('status-bytes').textContent = gameState.animalBytes;
+            document.getElementById('status-creature').textContent = gameState.currentCreature ? gameState.currentCreature.name : 'NONE';
+            
+            // Update animal bytes count in shop
+            const animalBytesElement = document.getElementById('animal-bytes-count');
+            if (animalBytesElement) {
+                animalBytesElement.textContent = gameState.animalBytes;
+            }
+        }
+        
+        // Display output in terminal
+        function displayOutput(text) {
+            const outputDiv = document.getElementById('output');
+            const newOutput = document.createElement('p');
+            newOutput.textContent = text;
+            outputDiv.appendChild(newOutput);
+            
+            // Auto-scroll to bottom
+            const terminalContent = document.querySelector('.terminal-content');
+            terminalContent.scrollTop = terminalContent.scrollHeight;
+        }
+        
+        // Handle command input
+        function handleCommandInput(event) {
+            if (event.key === 'Enter') {
+                const input = document.getElementById('command-input');
+                const command = input.value.trim();
+                
+                if (command !== '') {
+                    // Echo command
+                    displayOutput(`> ${command}`);
+                    
+                    // Process command
+                    processCommand(command);
+                    
+                    // Clear input
+                    input.value = '';
+                }
+            }
+        }
+        
+        // Process command
+        function processCommand(command) {
+            const commandLower = command.toLowerCase();
+            
+            // Global commands
+            if (commandLower === 'help') {
+                displayOutput('Available commands: help, status, phase [science/download/mission], create, save, load');
+                return;
+            }
+            
+            if (commandLower === 'status') {
+                displayOutput(`Scientist: ${gameState.scientistName}`);
+                displayOutput(`AnimalBytes: ${gameState.animalBytes}`);
+                displayOutput(`Current Phase: ${gameState.currentPhase}`);
+                displayOutput(`Subscription: ${gameState.subscription}`);
+                if (gameState.currentCreature) {
+                    displayOutput(`Current Creature: ${gameState.currentCreature.name}`);
+                } else {
+                    displayOutput('No creature created yet.');
+                }
+                return;
+            }
+            
+            if (commandLower.startsWith('phase ')) {
+                const phase = commandLower.split(' ')[1];
+                if (['science', 'download', 'mission'].includes(phase)) {
+                    switchPhase(phase);
+                    displayOutput(`Switched to ${phase.toUpperCase()} phase.`);
+                } else {
+                    displayOutput('Invalid phase. Available phases: science, download, mission');
+                }
+                return;
+            }
+            
+            // Phase-specific commands
+            switch (gameState.currentPhase) {
+                case 'science':
+                    handleScienceCommand(commandLower);
+                    break;
+                case 'download':
+                    handleDownloadCommand(commandLower);
+                    break;
+                case 'mission':
+                    handleMissionCommand(commandLower);
+                    break;
+                case 'battle':
+                    handleBattleCommand(commandLower);
+                    break;
+                case 'lab-crawl':
+                    handleLabCrawlCommand(commandLower);
+                    break;
+                default:
+                    displayOutput('Command not recognized in current phase.');
+            }
+        }
+        
+        // Science phase commands
+        function handleScienceCommand(command) {
+            if (command === 'create') {
+                createNewCreature();
+                return;
+            }
+            
+            if (command.startsWith('attach ')) {
+                const partId = command.split(' ')[1];
+                attachPart(partId);
+                return;
+            }
+            
+            if (command.startsWith('name ')) {
+                const name = command.substring(5);
+                if (gameState.currentCreature) {
+                    gameState.currentCreature.name = name;
+                    updateCreatureDisplay();
+                    updateStatusBar();
+                    displayOutput(`Creature renamed to ${name}.`);
+                } else {
+                    displayOutput('No creature to name. Create one first!');
+                }
+                return;
+            }
+            
+            if (command === 'parts') {
+                displayInventoryParts();
+                return;
+            }
+            
+            displayOutput('Science Lab commands: create, attach [part_id], name [creature_name], parts');
+        }
+        
+        // Download phase commands
+        function handleDownloadCommand(command) {
+            if (command === 'refresh') {
+                refreshPartShop();
+                displayOutput('Shop refreshed with new parts!');
+                return;
+            }
+            
+            if (command.startsWith('buy ')) {
+                const partId = command.split(' ')[1];
+                buyPart(partId);
+                return;
+            }
+            
+            if (command === 'list') {
+                displayShopParts();
+                return;
+            }
+            
+            displayOutput('Download Nexus commands: refresh, buy [part_id], list');
+        }
+        
+        // Mission phase commands
+        function handleMissionCommand(command) {
+            if (command.startsWith('start ')) {
+                const missionId = command.split(' ')[1];
+                startMission(missionId);
+                return;
+            }
+            
+            if (command === 'list') {
+                displayOutput('Available missions: jungle, arctic, desert, volcano (requires subscription)');
+                return;
+            }
+            
+            displayOutput('Mission Select commands: start [mission_id], list');
+        }
+        
+        // Battle phase commands
+        function handleBattleCommand(command) {
+            if (command === 'attack') {
+                battleAttack();
+                return;
+            }
+            
+            if (command === 'flee') {
+                endBattle(false);
+                return;
+            }
+            
+            if (command.startsWith('ability ')) {
+                const ability = command.split(' ')[1];
+                useAbility(ability);
+                return;
+            }
+            
+            displayOutput('Battle commands: attack, ability [ability_name], flee');
+        }
+        
+        // Lab-Crawl phase commands
+        function handleLabCrawlCommand(command) {
+            if (['n', 's', 'e', 'w'].includes(command)) {
+                labCrawlMove(command);
+                return;
+            }
+            
+            if (command === 'look') {
+                labCrawlLook();
+                return;
+            }
+            
+            if (command === 'take') {
+                labCrawlTake();
+                return;
+            }
+            
+            if (command === 'exit') {
+                endLabCrawl();
+                return;
+            }
+            
+            displayOutput('Lab-Crawl commands: n, s, e, w (movement), look, take, exit');
+        }
+        
+        // Create new creature
+        function createNewCreature() {
+            if (gameState.currentCreature) {
+                if (!confirm('This will replace your current creature. Continue?')) {
+                    return;
+                }
+            }
+            
+            gameState.currentCreature = {
+                name: 'Unnamed Creature',
+                parts: {
+                    head: null,
+                    chest: null,
+                    arms: null,
+                    legs: null,
+                    tail: null
+                },
+                stats: {
+                    strength: 0,
+                    intelligence: 0,
+                    defense: 0,
+                    hp: 100
+                },
+                abilities: []
+            };
+            
+            updateCreatureDisplay();
+            updateStatusBar();
+            displayOutput('New creature created! Attach parts using the ATTACH command.');
+        }
+        
+        // Attach part to creature
+        function attachPart(partId) {
+            if (!gameState.currentCreature) {
+                displayOutput('Create a creature first!');
+                return;
+            }
+            
+            const part = gameState.inventory.find(p => p.partId === partId);
+            if (!part) {
+                displayOutput(`Part ${partId} not found in your inventory.`);
+                return;
+            }
+            
+            // Remove current part's stats if it exists
+            const currentPart = gameState.currentCreature.parts[part.type.toLowerCase()];
+            if (currentPart) {
+                gameState.currentCreature.stats.strength -= currentPart.stats.strength;
+                gameState.currentCreature.stats.intelligence -= currentPart.stats.intelligence;
+                gameState.currentCreature.stats.defense -= currentPart.stats.defense;
+                
+                // Remove current part's abilities
+                if (currentPart) {
+                    currentPart.abilities.forEach(ability => {
+                        const index = gameState.currentCreature.abilities.indexOf(ability);
+                        if (index > -1) {
+                            gameState.currentCreature.abilities.splice(index, 1);
+                        }
+                    });
+                }
+                
+                // Attach new part and add its stats
+                gameState.currentCreature.parts[part.type.toLowerCase()] = part;
+                gameState.currentCreature.stats.strength += part.stats.strength;
+                gameState.currentCreature.stats.intelligence += part.stats.intelligence;
+                gameState.currentCreature.stats.defense += part.stats.defense;
+                
+                // Add new abilities
+                part.abilities.forEach(ability => {
+                    if (!gameState.currentCreature.abilities.includes(ability)) {
+                        gameState.currentCreature.abilities.push(ability);
+                    }
+                });
+                
+                updateCreatureDisplay();
+                displayOutput(`${part.name} attached to your creature!`);
+            }
+            
+            // Update creature display
+            function updateCreatureDisplay() {
+                if (!gameState.currentCreature) {
+                    document.getElementById('creature-details').innerHTML = 'No creature created yet. Use the CREATE command to assemble one!';
+                    return;
+                }
+                
+                const creature = gameState.currentCreature;
+                let html = `<h4>${creature.name}</h4>`;
+                
+                // Display parts
+                html += '<h5>PARTS:</h5>';
+                html += '<ul>';
+                for (const [type, part] of Object.entries(creature.parts)) {
+                    html += `<li>${type.toUpperCase()}: ${part ? part.name + ' ' + part.emoji : 'None'}</li>`;
+                }
+                html += '</ul>';
+                
+                // Display stats
+                html += '<h5>STATS:</h5>';
+                html += `<p>Strength: ${creature.stats.strength}</p>`;
+                html += `<p>Intelligence: ${creature.stats.intelligence}</p>`;
+                html += `<p>Defense: ${creature.stats.defense}</p>`;
+                html += `<p>HP: ${creature.stats.hp}</p>`;
+                
+                // Display abilities
+                html += '<h5>ABILITIES:</h5>';
+                html += '<ul>';
+                creature.abilities.forEach(ability => {
+                    html += `<li>${ability}</li>`;
+                });
+                html += '</ul>';
+                
+                document.getElementById('creature-details').innerHTML = html;
+            }
+            
+            // Update inventory display
+            function updateInventoryDisplay() {
+                const inventoryContainer = document.getElementById('parts-inventory');
+                inventoryContainer.innerHTML = '';
+                
+                if (gameState.inventory.length === 0) {
+                    inventoryContainer.innerHTML = '<p>Your inventory is empty. Visit the Download Nexus to acquire parts.</p>';
+                    return;
+                }
+                
+                gameState.inventory.forEach(part => {
+                    const partElement = document.createElement('div');
+                    partElement.className = 'part-item';
+                    
+                    partElement.innerHTML = `
+                        <div class="part-header">
+                            <span class="rarity-${part.rarity}">${part.emoji} ${part.name}</span>
+                            <span class="rarity-${part.rarity}">${part.rarity}</span>
+                        </div>
+                        <div>Type: ${part.type}</div>
+                        <div>Environment: ${part.environment}</div>
+                        <div class="part-stats">
+                            <div>STR: ${part.stats.strength}</div>
+                            <div>INT: ${part.stats.intelligence}</div>
+                            <div>DEF: ${part.stats.defense}</div>
+                        </div>
+                        <div>Abilities: ${part.abilities.join(', ')}</div>
+                        <div class="part-actions">
+                            <button onclick="attachPart('${part.partId}')" class="button">ATTACH</button>
+                        </div>
+                    `;
+                    
+                    inventoryContainer.appendChild(partElement);
+                });
+            }
+            
+            // Display inventory parts in terminal
+            function displayInventoryParts() {
+                if (gameState.inventory.length === 0) {
+                    displayOutput('Your inventory is empty. Visit the Download Nexus to acquire parts.');
+                    return;
+                }
+                
+                displayOutput('--- INVENTORY PARTS ---');
+                gameState.inventory.forEach(part => {
+                    displayOutput(`${part.partId} - ${part.name} (${part.type}) - ${part.rarity}`);
+                });
+            }
+            
+            // Load inventory with starter parts
+            function loadInventory() {
+                // This function is called on initialization
+                // Starter parts are added when the game starts
+            }
+            
+            // Update part shop display
+            function updatePartShop() {
+                const shopContainer = document.getElementById('parts-list');
+                shopContainer.innerHTML = '';
+                
+                // Filter parts based on subscription level
+                const availableForPurchase = availableParts.filter(part => {
+                    if (gameState.subscription === 'free' && part.rarity !== 'BASIC') {
+                        return false;
+                    }
+                    if (gameState.subscription === 'scientist' && part.rarity === 'ELITE') {
+                        return false;
+                    }
+                    return true;
+                });
+                
+                availableForPurchase.forEach(part => {
+                    const partElement = document.createElement('div');
+                    partElement.className = 'part-item';
+                    
+                    partElement.innerHTML = `
+                        <div class="part-header">
+                            <span class="rarity-${part.rarity}">${part.emoji} ${part.name}</span>
+                            <span class="rarity-${part.rarity}">${part.rarity}</span>
+                        </div>
+                        <div>Type: ${part.type}</div>
+                        <div>Environment: ${part.environment}</div>
+                        <div class="part-stats">
+                            <div>STR: ${part.stats.strength}</div>
+                            <div>INT: ${part.stats.intelligence}</div>
+                            <div>DEF: ${part.stats.defense}</div>
+                        </div>
+                        <div>Abilities: ${part.abilities.join(', ')}</div>
+                        <div class="part-actions">
+                            <span>Cost: ${part.cost} AnimalBytes</span>
+                            <button onclick="buyPart('${part.partId}')" class="button">BUY</button>
+                        </div>
+                    `;
+                    
+                    shopContainer.appendChild(partElement);
+                });
+            }
+            
+            // Refresh part shop
+            function refreshPartShop() {
+                // In a full implementation, this would refresh with different parts
+                // For this demo, we just update the display
+                updatePartShop();
+            }
+            
+            // Buy part
+            function buyPart(partId) {
+                const part = availableParts.find(p => p.partId === partId);
+                if (!part) {
+                    displayOutput(`Part ${partId} not found in shop.`);
+                    return;
+                }
+                
+                // Check if player has enough AnimalBytes
+                if (gameState.animalBytes < part.cost) {
+                    displayOutput(`Not enough AnimalBytes! You need ${part.cost} but only have ${gameState.animalBytes}.`);
+                    return;
+                }
+                
+                // Check if part is allowed for current subscription
+                if (gameState.subscription === 'free' && part.rarity !== 'BASIC') {
+                    displayOutput(`You need to upgrade your subscription to purchase ${part.rarity} parts!`);
+                    showSubscriptionOptions();
+                    return;
+                }
+                
+                if (gameState.subscription === 'scientist' && part.rarity === 'ELITE') {
+                    displayOutput(`You need to upgrade to MAD SCIENTIST subscription to purchase ELITE parts!`);
+                    showSubscriptionOptions();
+                    return;
+                }
+                
+                // Purchase the part
+                gameState.animalBytes -= part.cost;
+                gameState.inventory.push(Object.assign({}, part));
+                updateStatusBar();
+                displayOutput(`Purchased ${part.name} for ${part.cost} AnimalBytes!`);
+                
+                // Update displays
+                updatePartShop();
+                updateInventoryDisplay();
+            }
+            
+            // Display shop parts in terminal
+            function displayShopParts() {
+                displayOutput('--- AVAILABLE PARTS ---');
+                availableParts.forEach(part => {
+                    // Check if part is allowed for current subscription
+                    if (gameState.subscription === 'free' && part.rarity !== 'BASIC') {
+                        displayOutput(`${part.partId} - ${part.name} (${part.type}) - ${part.rarity} - ${part.cost} AB - UPGRADE REQUIRED`);
+                    } else if (gameState.subscription === 'scientist' && part.rarity === 'ELITE') {
+                        displayOutput(`${part.partId} - ${part.name} (${part.type}) - ${part.rarity} - ${part.cost} AB - UPGRADE REQUIRED`);
+                    } else {
+                        displayOutput(`${part.partId} - ${part.name} (${part.type}) - ${part.rarity} - ${part.cost} AB`);
+                    }
+                });
+            }
+            
+            // Filter parts by type
+            function filterParts(type) {
+                // This would be implemented in a full version
+                // For now, we'll just show all parts
+                displayOutput(`Filtering parts by type: ${type}`);
+            }
+            
+            // Filter parts by rarity
+            function filterRarity(rarity) {
+                // This would be implemented in a full version
+                // For now, we'll just show all parts
+                displayOutput(`Filtering parts by rarity: ${rarity}`);
+            }
+            
+            // Start mission
+            function startMission(missionId) {
+                if (!gameState.currentCreature) {
+                    displayOutput('You need to create a creature first!');
+                    return;
+                }
+                
+                // Check if all parts are attached
+                const requiredParts = ['head', 'chest', 'arms', 'legs', 'tail'];
+                const missingParts = requiredParts.filter(part => !gameState.currentCreature.parts[part]);
+                
+                if (missingParts.length > 0) {
+                    displayOutput(`Your creature is missing: ${missingParts.join(', ')}. Complete your creature before starting a mission.`);
+                    return;
+                }
+                
+                // Check if the mission requires a subscription
+                if (missionId === 'volcano' && gameState.subscription === 'free') {
+                    displayOutput('This mission requires a subscription upgrade!');
+                    showSubscriptionOptions();
+                    return;
+                }
+                
+                // Set up mission environment
+                let environment = 'Jungle';
+                let reward = 100;
+                let enemyName = 'Wild Beast';
+                
+                switch(missionId) {
+                    case 'jungle':
+                        environment = 'Jungle';
+                        reward = 100;
+                        enemyName = 'Wild Beast';
+                        break;
+                    case 'arctic':
+                        environment = 'Ice';
+                        reward = 200;
+                        enemyName = 'Frost Creature';
+                        break;
+                    case 'desert':
+                        environment = 'Desert';
+                        reward = 300;
+                        enemyName = 'Sand Dweller';
+                        break;
+                    case 'volcano':
+                        environment = 'Volcano';
+                        reward = 500;
+                        enemyName = 'Magma Monstrosity';
+                        break;
+                }
+                
+                // Set up battle state
+                gameState.battleState = {
+                    environment: environment,
+                    reward: reward,
+                    enemy: {
+                        name: enemyName,
+                        hp: 100,
+                        maxHp: 100,
+                        strength: Math.floor(Math.random() * 10) + 5,
+                        intelligence: Math.floor(Math.random() * 10) + 5,
+                        defense: Math.floor(Math.random() * 10) + 5
+                    },
+                    player: {
+                        hp: gameState.currentCreature.stats.hp,
+                        maxHp: gameState.currentCreature.stats.hp
+                    },
+                    turn: 'player'
+                };
+                
+                // Switch to battle phase
+                switchPhase('battle');
+                
+                // Update battle display
+                document.getElementById('current-environment').textContent = environment;
+                document.getElementById('player-creature-name').textContent = gameState.currentCreature.name;
+                document.getElementById('enemy-creature-name').textContent = enemyName;
+                document.getElementById('player-health').textContent = `HP: ${gameState.battleState.player.hp}/${gameState.battleState.player.maxHp}`;
+                document.getElementById('enemy-health').textContent = `HP: ${gameState.battleState.enemy.hp}/${gameState.battleState.enemy.maxHp}`;
+                document.getElementById('player-health-bar').style.width = '100%';
+                document.getElementById('enemy-health-bar').style.width = '100%';
+                
+                // Clear battle log
+                document.querySelector('.battle-log').innerHTML = `
+                    <p>BATTLE INITIATED!</p>
+                    <p>Environment: ${environment}</p>
+                    <p>Your ${gameState.currentCreature.name} faces off against the ${enemyName}!</p>
+                `;
+                
+                // Update ability buttons
+                const abilityContainer = document.querySelector('.ability-buttons');
+                abilityContainer.innerHTML = '';
+                
+                gameState.currentCreature.abilities.forEach(ability => {
+                    const button = document.createElement('button');
+                    button.className = 'button';
+                    button.textContent = ability.toUpperCase();
+                    button.onclick = function() { useAbility(ability); };
+                    abilityContainer.appendChild(button);
+                });
+                
+                // Add basic attack button
+                const attackButton = document.createElement('button');
+                attackButton.className = 'button';
+                attackButton.textContent = 'BASIC ATTACK';
+                attackButton.onclick = function() { battleAttack(); };
+                abilityContainer.appendChild(attackButton);
+                
+                // Add flee button
+                const fleeButton = document.createElement('button');
+                fleeButton.className = 'button';
+                fleeButton.textContent = 'FLEE';
+                fleeButton.onclick = function() { endBattle(false); };
+                abilityContainer.appendChild(fleeButton);
+                
+                displayOutput(`Mission started: ${missionId} - ${environment} environment`);
+            }
+            
+            // Battle attack
+            function battleAttack() {
+                if (gameState.battleState.turn !== 'player') {
+                    return;
+                }
+                
+                // Calculate damage
+                const damage = Math.max(1, gameState.currentCreature.stats.strength - gameState.battleState.enemy.defense / 2);
+                
+                // Apply damage
+                gameState.battleState.enemy.hp = Math.max(0, gameState.battleState.enemy.hp - damage);
+                
+                // Update enemy health display
+                document.getElementById('enemy-health').textContent = `HP: ${gameState.battleState.enemy.hp}/${gameState.battleState.enemy.maxHp}`;
+                document.getElementById('enemy-health-bar').style.width = `${(gameState.battleState.enemy.hp / gameState.battleState.enemy.maxHp) * 100}%`;
+                
+                // Add to battle log
+                const battleLog = document.querySelector('.battle-log');
+                battleLog.innerHTML += `<p>Your ${gameState.currentCreature.name} attacks for ${damage} damage!</p>`;
+                battleLog.scrollTop = battleLog.scrollHeight;
+                
+               // Check if enemy is defeated
+if (gameState.battleState.enemy.hp <= 0) {
+    // Victory!
+    endBattle(true);
+    return;
+}
+
+// Switch turn to enemy
+gameState.battleState.turn = 'enemy';
+
+// Add enemy turn message
+battleLog.innerHTML += `<p>The ${gameState.battleState.enemy.name} prepares to attack...</p>`;
+
+// Set a delay for enemy attack
+setTimeout(enemyTurn, 1000);
+}
+
+// Enemy turn logic
+function enemyTurn() {
+    // Calculate enemy damage
+    const damage = Math.max(1, gameState.battleState.enemy.strength - gameState.currentCreature.stats.defense / 2);
+    
+    // Apply damage
+    gameState.battleState.player.hp = Math.max(0, gameState.battleState.player.hp - damage);
+    
+    // Update player health display
+    document.getElementById('player-health').textContent = `HP: ${gameState.battleState.player.hp}/${gameState.battleState.player.maxHp}`;
+    document.getElementById('player-health-bar').style.width = `${(gameState.battleState.player.hp / gameState.battleState.player.maxHp) * 100}%`;
+    
+    // Add to battle log
+    const battleLog = document.querySelector('.battle-log');
+    battleLog.innerHTML += `<p>The ${gameState.battleState.enemy.name} attacks your creature for ${damage} damage!</p>`;
+    battleLog.scrollTop = battleLog.scrollHeight;
+    
+    // Check if player is defeated
+    if (gameState.battleState.player.hp <= 0) {
+        // Defeat
+        endBattle(false);
+        return;
+    }
+    
+    // Switch turn back to player
+    gameState.battleState.turn = 'player';
+    
+    // Add player turn message
+    battleLog.innerHTML += `<p>Your turn - select an action...</p>`;
+}
+
+// Use special ability
+function useAbility(abilityName) {
+    if (gameState.battleState.turn !== 'player') {
+        return;
+    }
+    
+    const battleLog = document.querySelector('.battle-log');
+    let damage = 0;
+    let effectDescription = '';
+    
+    // Calculate special ability effects
+    switch(abilityName.toLowerCase()) {
+        case 'bite':
+            damage = Math.max(2, gameState.currentCreature.stats.strength * 1.5 - gameState.battleState.enemy.defense / 2);
+            effectDescription = 'bites ferociously';
+            break;
+        case 'claw':
+            damage = Math.max(2, gameState.currentCreature.stats.strength * 1.2 - gameState.battleState.enemy.defense / 3);
+            effectDescription = 'slashes with sharp claws';
+            break;
+        case 'stomp':
+            damage = Math.max(2, gameState.currentCreature.stats.strength * 1.3 - gameState.battleState.enemy.defense / 4);
+            effectDescription = 'stomps powerfully';
+            break;
+        case 'roar':
+            // Reduces enemy defense temporarily
+            gameState.battleState.enemy.defense = Math.max(1, gameState.battleState.enemy.defense - 2);
+            effectDescription = 'lets out a mighty roar, reducing enemy defense';
+            break;
+        case 'poison':
+            damage = Math.max(1, gameState.currentCreature.stats.intelligence - gameState.battleState.enemy.defense / 5);
+            // Additional damage over time (simplified for this version)
+            gameState.battleState.enemy.poisoned = 2; // Number of turns
+            effectDescription = 'inflicts poison';
+            break;
+        case 'heal':
+            // Heal self
+            const healAmount = Math.floor(gameState.currentCreature.stats.intelligence / 2);
+            gameState.battleState.player.hp = Math.min(
+                gameState.battleState.player.maxHp,
+                gameState.battleState.player.hp + healAmount
+            );
+            // Update player health display
+            document.getElementById('player-health').textContent = `HP: ${gameState.battleState.player.hp}/${gameState.battleState.player.maxHp}`;
+            document.getElementById('player-health-bar').style.width = `${(gameState.battleState.player.hp / gameState.battleState.player.maxHp) * 100}%`;
+            battleLog.innerHTML += `<p>Your ${gameState.currentCreature.name} heals for ${healAmount} HP!</p>`;
+            // Switch turn to enemy after healing
+            gameState.battleState.turn = 'enemy';
+            setTimeout(enemyTurn, 1000);
+            return;
+        default:
+            // Generic ability
+            damage = Math.max(1, gameState.currentCreature.stats.strength - gameState.battleState.enemy.defense / 2);
+            effectDescription = 'uses ' + abilityName;
+    }
+    
+    // Apply ability effect
+    if (damage > 0) {
+        // Apply damage
+        gameState.battleState.enemy.hp = Math.max(0, gameState.battleState.enemy.hp - damage);
+        
+        // Update enemy health display
+        document.getElementById('enemy-health').textContent = `HP: ${gameState.battleState.enemy.hp}/${gameState.battleState.enemy.maxHp}`;
+        document.getElementById('enemy-health-bar').style.width = `${(gameState.battleState.enemy.hp / gameState.battleState.enemy.maxHp) * 100}%`;
+        
+        // Add to battle log
+        battleLog.innerHTML += `<p>Your ${gameState.currentCreature.name} ${effectDescription} for ${damage} damage!</p>`;
+    } else {
+        // Non-damage ability
+        battleLog.innerHTML += `<p>Your ${gameState.currentCreature.name} ${effectDescription}!</p>`;
+    }
+    
+    battleLog.scrollTop = battleLog.scrollHeight;
+    
+    // Check if enemy is defeated
+    if (gameState.battleState.enemy.hp <= 0) {
+        // Victory!
+        endBattle(true);
+        return;
+    }
+    
+    // Switch turn to enemy
+    gameState.battleState.turn = 'enemy';
+    
+    // Enemy turn with delay
+    setTimeout(enemyTurn, 1000);
+}
+
+// End battle (victory or defeat)
+function endBattle(victory) {
+    const battleLog = document.querySelector('.battle-log');
+    
+    if (victory) {
+        battleLog.innerHTML += `<p class="victory-message">VICTORY! You defeated the ${gameState.battleState.enemy.name}!</p>`;
+        battleLog.innerHTML += `<p>You earned ${gameState.battleState.reward} AnimalBytes!</p>`;
+        
+        // Add reward to player's resources
+        gameState.animalBytes += gameState.battleState.reward;
+        gameState.stats.wins += 1;
+        
+        // Update stats display
+        document.getElementById('animal-bytes').textContent = gameState.animalBytes;
+        
+        // Potentially unlock new missions based on wins
+        checkMissionUnlocks();
+        
+        // Return to mission select after delay
+        setTimeout(() => {
+            switchPhase('mission');
+            displayOutput(`Mission completed! Earned ${gameState.battleState.reward} AnimalBytes.`);
+        }, 3000);
+    } else {
+        battleLog.innerHTML += `<p class="defeat-message">DEFEAT! Your ${gameState.currentCreature.name} was defeated.</p>`;
+        gameState.stats.losses += 1;
+        
+        // Return to mission select after delay
+        setTimeout(() => {
+            switchPhase('mission');
+            displayOutput('Mission failed! Better prepare your creature for next time.');
+        }, 3000);
+    }
+    
+    // Clear battle state
+    gameState.battleState = null;
+}
+
+// Check for mission unlocks based on player progress
+function checkMissionUnlocks() {
+    // Simplified logic - would expand in full version
+    if (gameState.stats.wins >= 3 && gameState.subscription !== 'free') {
+        // Unlock volcano mission
+        document.getElementById('volcano-mission').classList.remove('locked');
+    }
+}
+
+// Show subscription options
+function showSubscriptionOptions() {
+    displayOutput('--- SUBSCRIPTION OPTIONS ---');
+    displayOutput('Free Tier (Current): Limited access to basic parts and standard missions.');
+    displayOutput('Scientist Tier ($5.99/month): Access to BASIC and ADVANCED parts. Increased AnimalBytes earning.');
+    displayOutput('Mad Scientist Tier ($12.99/month): Full access to all part rarities including ELITE. Premium missions.');
+    
+    // In a real implementation, this would open a payment modal
+    displayOutput('To upgrade, click the Subscribe button below.');
+    
+    // Create subscription buttons
+    const subscribeContainer = document.createElement('div');
+    subscribeContainer.className = 'subscribe-options';
+    
+    // Scientist tier button
+    const scientistButton = document.createElement('button');
+    scientistButton.className = 'button subscribe-button';
+    scientistButton.textContent = 'Upgrade to Scientist ($5.99/month)';
+    scientistButton.onclick = function() { upgradeSubscription('scientist'); };
+    subscribeContainer.appendChild(scientistButton);
+    
+    // Mad Scientist tier button
+    const madScientistButton = document.createElement('button');
+    madScientistButton.className = 'button subscribe-button';
+    madScientistButton.textContent = 'Upgrade to Mad Scientist ($12.99/month)';
+    madScientistButton.onclick = function() { upgradeSubscription('madScientist'); };
+    subscribeContainer.appendChild(madScientistButton);
+    
+    // Cancel button
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'button cancel-button';
+    cancelButton.textContent = 'Maybe Later';
+    cancelButton.onclick = function() { 
+        document.getElementById('output').removeChild(subscribeContainer);
+        displayOutput('You can upgrade anytime from the settings menu.');
+    };
+    subscribeContainer.appendChild(cancelButton);
+    
+    // Append to output
+    document.getElementById('output').appendChild(subscribeContainer);
+}
+
+// Handle subscription upgrade (mock implementation)
+function upgradeSubscription(tier) {
+    // In a real app, this would process payment through Stripe or similar
+    displayOutput(`Processing ${tier} subscription...`);
+    
+    // Simulate processing delay
+    setTimeout(() => {
+        // Update game state
+        gameState.subscription = tier;
+        
+        if (tier === 'scientist') {
+            displayOutput('You are now a Scientist! You have access to BASIC and ADVANCED parts.');
+            // Unlock more missions
+            document.getElementById('arctic-mission').classList.remove('locked');
+            document.getElementById('desert-mission').classList.remove('locked');
+        } else if (tier === 'madScientist') {
+            displayOutput('You are now a Mad Scientist! You have access to ALL parts including ELITE.');
+            // Unlock all missions
+            document.getElementById('arctic-mission').classList.remove('locked');
+            document.getElementById('desert-mission').classList.remove('locked');
+            document.getElementById('volcano-mission').classList.remove('locked');
+        }
+        
+        // Save the updated game state
+        saveGameState();
+        displayOutput('Subscription activated successfully!');
+        
+        // Clear subscription buttons
+        const subscribeContainer = document.querySelector('.subscribe-options');
+        if (subscribeContainer) {
+            document.getElementById('output').removeChild(subscribeContainer);
+        }
+        
+        // Refresh available parts in shop
+        if (gameState.currentPhase === 'download') {
+            loadShopPhase();
+        }
+    }, 2000);
+}
+
+// Science lab functions for creating creatures
+function createNewCreature() {
+    const creatureName = document.getElementById('creature-name-input').value;
+    
+    if (!creatureName || creatureName.trim() === '') {
+        displayOutput('Please enter a name for your creature.');
+        return;
+    }
+    
+    // Create new creature with empty parts
+    gameState.currentCreature = {
+        name: creatureName,
+        parts: {
+            head: null,
+            chest: null,
+            arms: null,
+            legs: null,
+            tail: null
+        },
+        stats: {
+            strength: 0,
+            intelligence: 0,
+            defense: 0,
+            hp: 0
+        },
+        abilities: []
+    };
+    
+    displayOutput(`New creature created: ${creatureName}`);
+    displayOutput('Now attach parts to your creature from your inventory.');
+    
+    // Update the creature display
+    updateCreatureDisplay();
+    
+    // Show inventory parts
+    displayInventoryParts();
+}
+
+// Update creature display in science lab
+function updateCreatureDisplay() {
+    if (!gameState.currentCreature) {
+        return;
+    }
+    
+    // Update name display
+    document.getElementById('creature-display-name').textContent = gameState.currentCreature.name;
+    
+    // Update parts display
+    const partsDisplay = document.getElementById('creature-parts-display');
+    partsDisplay.innerHTML = '<h3>Creature Parts</h3>';
+    
+    const partTypes = ['head', 'chest', 'arms', 'legs', 'tail'];
+    partTypes.forEach(type => {
+        const partElement = document.createElement('div');
+        partElement.className = 'creature-part';
+        
+        if (gameState.currentCreature.parts[type]) {
+            const part = gameState.currentCreature.parts[type];
+            partElement.innerHTML = `
+                <span>${type.toUpperCase()}: ${part.name}</span>
+                <button class="small-button" onclick="removePart('${type}')">Remove</button>
+            `;
+        } else {
+            partElement.innerHTML = `<span>${type.toUpperCase()}: (empty)</span>`;
+        }
+        
+        partsDisplay.appendChild(partElement);
+    });
+    
+    // Update stats display
+    document.getElementById('creature-strength').textContent = gameState.currentCreature.stats.strength;
+    document.getElementById('creature-intelligence').textContent = gameState.currentCreature.stats.intelligence;
+    document.getElementById('creature-defense').textContent = gameState.currentCreature.stats.defense;
+    document.getElementById('creature-hp').textContent = gameState.currentCreature.stats.hp;
+    
+    // Update abilities display
+    const abilitiesDisplay = document.getElementById('creature-abilities-display');
+    abilitiesDisplay.innerHTML = '<h3>Abilities</h3>';
+    
+    if (gameState.currentCreature.abilities.length === 0) {
+        abilitiesDisplay.innerHTML += '<p>No abilities yet.</p>';
+    } else {
+        const abilitiesList = document.createElement('ul');
+        gameState.currentCreature.abilities.forEach(ability => {
+            const abilityItem = document.createElement('li');
+            abilityItem.textContent = ability;
+            abilitiesList.appendChild(abilityItem);
+        });
+        abilitiesDisplay.appendChild(abilitiesList);
+    }
+}
+
+// Display inventory parts in science lab
+function displayInventoryParts() {
+    const inventoryDisplay = document.getElementById('parts-inventory');
+    inventoryDisplay.innerHTML = '<h3>Your Parts Inventory</h3>';
+    
+    // Group parts by type
+    const partsByType = {};
+    gameState.inventory.forEach(part => {
+        if (!partsByType[part.type]) {
+            partsByType[part.type] = [];
+        }
+        partsByType[part.type].push(part);
+    });
+    
+    // Display parts by type
+    for (const type in partsByType) {
+        const typeHeader = document.createElement('h4');
+        typeHeader.textContent = type.toUpperCase();
+        inventoryDisplay.appendChild(typeHeader);
+        
+        const partsList = document.createElement('div');
+        partsList.className = 'parts-list';
+        
+        partsByType[type].forEach(part => {
+            const partElement = document.createElement('div');
+            partElement.className = 'inventory
+
+// Attach part to creature
+function attachPart(partIndex) {
+    const part = gameState.inventory[partIndex];
+    
+    if (!gameState.currentCreature) {
+        displayOutput('First create a creature in the science lab.');
+        return;
+    }
+    
+    // Check if part slot is already filled
+    if (gameState.currentCreature.parts[part.type]) {
+        // Ask for confirmation to replace
+        const confirmReplace = confirm(`Replace current ${part.type} part with ${part.name}?`);
+        if (!confirmReplace) {
+            return;
+        }
+    }
+    
+    // Attach the part
+    gameState.currentCreature.parts[part.type] = {...part};
+    
+    // Recalculate creature stats
+    recalculateCreatureStats();
+    
+    // Update creature display
+    updateCreatureDisplay();
+    
+    displayOutput(`Attached ${part.name} to your creature's ${part.type}.`);
+}
+
+// Remove part from creature
+function removePart(partType) {
+    if (!gameState.currentCreature || !gameState.currentCreature.parts[partType]) {
+        return;
+    }
+    
+    const removedPart = gameState.currentCreature.parts[partType];
+    gameState.currentCreature.parts[partType] = null;
+    
+    // Recalculate creature stats
+    recalculateCreatureStats();
+    
+    // Update creature display
+    updateCreatureDisplay();
+    
+    displayOutput(`Removed ${removedPart.name} from your creature's ${partType}.`);
+}
+
+// Recalculate creature stats based on parts
+function recalculateCreatureStats() {
+    if (!gameState.currentCreature) {
+        return;
+    }
+    
+    // Reset stats
+    gameState.currentCreature.stats = {
+        strength: 0,
+        intelligence: 0,
+        defense: 0,
+        hp: 0
+    };
+    
+    // Reset abilities
+    gameState.currentCreature.abilities = [];
+    
+    // Calculate total stats from parts
+    Object.values(gameState.currentCreature.parts).forEach(part => {
+        if (!part) return;
+        
+        // Add part stats
+        gameState.currentCreature.stats.strength += part.stats.strength;
+        gameState.currentCreature.stats.intelligence += part.stats.intelligence;
+        gameState.currentCreature.stats.defense += part.stats.defense;
+        
+        // Add abilities
+        if (part.abilities && Array.isArray(part.abilities)) {
+            part.abilities.forEach(ability => {
+                if (!gameState.currentCreature.abilities.includes(ability)) {
+                    gameState.currentCreature.abilities.push(ability);
+                }
+            });
+        }
+    });
+    
+    // Calculate HP based on defense and strength
+    gameState.currentCreature.stats.hp = 20 + 
+        Math.floor(gameState.currentCreature.stats.defense * 1.5) +
+        Math.floor(gameState.currentCreature.stats.strength * 0.5);
+}
+
+// Save creature to collection
+function saveCreature() {
+    if (!gameState.currentCreature) {
+        displayOutput('No creature to save.');
+        return;
+    }
+    
+    // Check if creature has all required parts
+    const requiredP
