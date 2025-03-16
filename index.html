@@ -1,520 +1,1076 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BioChomps - Mad Science Terminal</title>
+  <meta charset="UTF-8">
+  <title>NODEZ - ASCII Builder Sim</title>
   <style>
-    @font-face {
-      font-family: 'VT323';
-      src: url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
-      font-style: normal;
-      font-weight: 400;
-    }
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-      background-color: #000;
-      font-family: 'VT323', 'Courier New', monospace;
-      color: #33ff33;
-      line-height: 1.4;
-      cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="16" viewBox="0 0 12 16"><rect x="0" y="0" width="8" height="16" fill="%2333ff33"/></svg>') 0 0, auto;
-    }
-    .terminal-container {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      padding: 20px;
-      box-sizing: border-box;
-    }
-    /* Fixed scanlines - vertical, top to bottom */
-    .scanlines {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(
-        to bottom,
-        rgba(51, 255, 51, 0.03) 50%,
-        rgba(0, 0, 0, 0.1) 50%
-      );
-      background-size: 100% 4px;
-      pointer-events: none;
-      z-index: 10;
-    }
-    /* Fixed horizontal scan effect - moves from top to bottom */
-    .horizontal-scanline {
-      position: absolute;
-      top: -5%;
-      left: 0;
-      width: 100%;
-      height: 2px;
-      background-color: rgba(51, 255, 51, 0.3);
-      opacity: 0.7;
-      box-shadow: 0 0 5px rgba(51, 255, 51, 0.5);
-      z-index: 11;
-      animation: horizontalScan 4s linear infinite;
-      pointer-events: none;
-    }
-    .crt-effect {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.2) 80%, rgba(0, 0, 0, 0.4) 100%);
-      pointer-events: none;
-      z-index: 12;
-    }
-    .terminal-content {
-      height: calc(100% - 40px);
-      overflow-y: auto;
-      padding-right: 10px;
-      position: relative;
-      z-index: 2;
-      scrollbar-width: thin;
-      scrollbar-color: #33ff33 #000;
-    }
-    .terminal-content::-webkit-scrollbar {
-      width: 8px;
-    }
-    .terminal-content::-webkit-scrollbar-track {
-      background: #000;
-    }
-    .terminal-content::-webkit-scrollbar-thumb {
-      background: #33ff33;
-    }
-    .input-line {
-      display: flex;
-      margin-top: 20px;
-    }
-    .prompt {
-      color: #33ff33;
-      font-weight: bold;
-      margin-right: 8px;
-    }
-    .user-input {
-      flex-grow: 1;
-      background: transparent;
-      border: none;
-      color: #33ff33;
-      font-family: 'VT323', 'Courier New', monospace;
-      font-size: 1em;
-      caret-color: #33ff33;
-      outline: none;
-    }
-    .game-header {
-      text-align: center;
-      margin-bottom: 20px;
-      font-weight: bold;
-    }
-    .ascii-art {
-      white-space: pre;
-      line-height: 1.2;
-      text-align: center;
-      margin: 20px 0;
-    }
-    .status-bar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      background-color: #000;
-      border-top: 1px solid #33ff33;
-      padding: 5px 20px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.9em;
-      z-index: 5;
-    }
-    .game-phase {
-      display: none;
-    }
-    .game-phase.active {
-      display: block;
-    }
-    .button {
-      background-color: #000;
-      color: #33ff33;
-      border: 1px solid #33ff33;
-      padding: 5px 10px;
-      margin: 5px;
-      cursor: pointer;
-      font-family: 'VT323', 'Courier New', monospace;
-    }
-    .button:hover {
-      background-color: #33ff33;
-      color: #000;
-    }
-    .flicker {
-      animation: textFlicker 5s infinite;
-    }
-    @keyframes textFlicker {
-      0% { opacity: 1; }
-      92% { opacity: 1; }
-      93% { opacity: 0.3; }
-      94% { opacity: 1; }
-      97% { opacity: 0.5; }
-      98% { opacity: 1; }
-      100% { opacity: 1; }
-    }
-    /* Fixed animation for the horizontal scanline */
-    @keyframes horizontalScan {
-      0% { top: -5%; }
-      80% { top: 105%; }
-      100% { top: 105%; }
-    }
-    /* Screen startup animation */
-    .terminal-container::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: #000;
-      z-index: 100;
-      animation: startup 2s ease-out forwards;
-    }
-    @keyframes startup {
-      0% { height: 100%; }
-      90% { height: 5px; }
-      100% { height: 0; }
-    }
+    body { background-color: black; color: #00FF00; font-family: monospace; margin: 0; padding: 0; overflow: hidden; }
+    .crt { animation: flicker 0.15s infinite; position: relative; }
+    .crt::before { content: ""; display: block; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(transparent 0px, rgba(0, 255, 0, 0.03) 1px, transparent 2px); pointer-events: none; z-index: 1000; }
+    @keyframes flicker { 0% { opacity: 0.95; } 50% { opacity: 1; } 100% { opacity: 0.95; } }
+    #ascii-display { white-space: pre; margin: 0; cursor: pointer; user-select: none; position: absolute; top:0; left:0; right:220px; bottom:0; overflow: auto; padding: 10px; }
+    #sidebar { position: fixed; top: 0; right: 0; width: 220px; height: 100vh; padding:10px; border-left:1px solid #00FF00; background: rgba(0,0,0,0.9); }
+    button { margin: 5px; cursor: pointer; background-color: #003300; color: #00FF00; border: 1px solid #00FF00; padding: 5px 10px; }
+    button:hover { background-color: #004400; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #logo { text-align: center; margin-bottom: 10px; }
+    #instructions { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.9); border: 1px solid #00FF00; padding: 20px; max-width: 500px; z-index: 100; }
+    .close-btn { position: absolute; top: 5px; right: 10px; cursor: pointer; }
+    #status-message { color: #FFFF00; height: 40px; margin-top: 10px; }
+    .connection-line { color: #00FFFF; }
+    #start-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+    #context-menu { display: none; position: absolute; background-color: #001100; border: 1px solid #00FF00; z-index: 1000; }
+    #context-menu button { display: block; width: 100%; text-align: left; background: none; border: none; color: #00FF00; padding: 5px 10px; }
+    #context-menu button:hover { background-color: #002200; }
   </style>
 </head>
-<body>
-  <div class="terminal-container">
-    <div class="scanlines"></div>
-    <div class="horizontal-scanline"></div>
-    <div class="crt-effect"></div>
+<body class="crt">
+<div id="start-screen">
+  <pre id="logo">
+███╗   ██╗ ██████╗ ██████╗ ███████╗███████╗
+████╗  ██║██╔═══██╗██╔══██╗██╔════╝╚══███╔╝
+██╔██╗ ██║██║   ██║██║  ██║█████╗    ███╔╝ 
+██║╚██╗██║██║   ██║██║  ██║██╔══╝   ███╔╝  
+██║ ╚████║╚██████╔╝██████╔╝███████╗███████╗
+╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝╚══════╝
+  </pre>
+  <button onclick="startGame()">START GAME</button>
+  <button onclick="showHowToPlay()">HOW TO PLAY</button>
+</div>
 
-    <div class="terminal-content">
-      <div class="game-header flicker">
-        <div class="ascii-art">
-          ██████╗ ██╗ ██████╗  ██████╗██╗  ██║ ██████╗ ███╗   ███╗██████╗ ███████╗
-          ██╔══██╗██║██╔═══██╗██╔════╝██║  ██║██╔═══██╗████╗ ████║██╔══██╗██╔════╝
-          ██████╔╝██║██║   ██║██║     ███████║██║   ██║██╔████╔██║██████╔╝███████╗
-          ██╔══██╗██║██║   ██║██║     ██╔══██║██║   ██║██║╚██╔╝██║██╔═══╝ ╚════██║
-          ██████╔╝██║╚██████╔╝╚██████╗██║  ██║╚██████╔╝██║ ╚═╝ ██║██║     ███████║
-          ╚═════╝ ╚═╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚══════╝
-        </div>
-        <p>MAD SCIENCE TERMINAL v3.14159</p>
-        <p>SYSTEM BOOTUP... COMPLETE</p>
-        <p>WELCOME TO THE LABORATORY, MAD SCIENTIST!</p>
-      </div>
-
-      <!-- Start Screen -->
-      <div id="start-screen" class="game-phase active">
-        <p>INITIALIZING BIOCHOMPS PROTOCOL...</p>
-        <p>CREATE YOUR MAD SCIENTIST IDENTITY TO BEGIN:</p>
-        <div class="input-line">
-          <span class="prompt">NAME:</span>
-          <input type="text" id="scientist-name" class="user-input" placeholder="Enter your mad scientist name">
-        </div>
-        <div style="margin-top: 20px; text-align: center;">
-          <button onclick="configureAPI()" class="button">CONFIGURE AI NEURAL LINK</button>
-          <button onclick="startGame()" class="button">BEGIN EXPERIMENTATION</button>
-          <button onclick="startGptGame()" class="button">LAUNCH GPT VIDEO GAME</button>
-        </div>
-      </div>
-
-      <!-- Chat Phase (existing GPT chat interface) -->
-      <div id="chat-phase" class="game-phase">
-        <div id="chat-container">
-          <div id="chat-messages">
-            <div class="system-message">
-              * BioChomps AI System initialized *
-            </div>
-            <div class="bot-message">
-              Greetings, mad scientist! I am the BioChomps AI system, ready to assist with your genetic experimentation and creature battles. What sinister plans shall we execute today?
-            </div>
-            <div class="typing-indicator" id="typing-indicator">
-              BioChomps AI thinking<span class="thinking">...</span>
-            </div>
-          </div>
-          <div id="chat-input-container">
-            <input type="text" id="chat-input" placeholder="Enter your command, professor..." autocomplete="off">
-            <button id="send-button">TRANSMIT</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Status Bar -->
-      <div class="status-bar">
-        <div id="user-info">USER: [UNDEFINED]</div>
-        <div id="system-info">
-          SYSTEM: <span id="system-status">STANDBY</span>
-          <button id="api-settings-button" onclick="configureAPI()">⚙️</button>
-        </div>
-      </div>
+<div id="game-screen" style="display:none;">
+  <div id="ascii-display"></div>
+  <div id="sidebar">
+    <h2>Game Stats</h2>
+    <p id="turn-info">Turn: 0</p>
+    <p id="money-info">Money: $0</p>
+    <p id="moves-info">Moves: 0/0</p>
+    <p id="income-info">Income: $0</p>
+    <p id="tax-info">Tax: $0 (Next: Turn 5)</p>
+    <div id="status-message"></div>
+    <button id="next-turn" disabled onclick="nextTurn()">Next Turn</button>
+    <h3>Legend</h3>
+    <p>(N): Node</p>
+    <p>$: Resource</p>
+    <p>^: Tree</p>
+    <p>#: Rock</p>
+    <p>/\: Mountain</p>
+    <p>~: River</p>
+    <p>O: Lake</p>
+    <p>D: Dog</p>
+    <p>R: Refinery</p>
+    <p>F: Factory</p>
+    <p>--: Road</p>
+    <p>==: Highway</p>
+    <p>||: Shipping Lane</p>
+    <div>
+      <h3>Actions</h3>
+      <p>Build Road: $15</p>
+      <p>Build Highway: $Varies</p>
+      <p>Build Bridge: $50</p>
+      <p>Clear Tree: $50</p>
+      <p>Clear Rock: $150</p>
+      <p>Build Tunnel: $500</p>
+      <p>Pet Dog: +$50/turn</p>
     </div>
   </div>
+</div>
 
-  <!-- API Configuration Modal -->
-  <div id="api-modal" class="modal" style="display:none;">
-    <div class="modal-content">
-      <span class="close-modal" onclick="closeAPIModal()">&times;</span>
-      <h2 style="text-align: center; color: #33ff33;">NEURAL LINK CONFIGURATION</h2>
-      <form id="api-form" class="api-form">
-        <label for="api-key">API KEY:</label>
-        <input type="password" id="api-key" placeholder="Enter your OpenAI API key">
-        <label for="api-model">AI MODEL:</label>
-        <select id="api-model">
-          <option value="gpt-4-turbo">GPT-4 Turbo (Recommended)</option>
-          <option value="gpt-4">GPT-4</option>
-          <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster)</option>
-        </select>
-        <label for="system-prompt">SYSTEM INITIALIZATION:</label>
-        <input type="text" id="system-prompt" value="You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language.">
-        <div style="text-align: center; margin-top: 20px;">
-          <button type="button" onclick="saveAPIConfig()" class="button">INITIALIZE NEURAL LINK</button>
-        </div>
-      </form>
-    </div>
-  </div>
+<div id="context-menu"></div>
 
-  <script>
-    let scientistName = "";
-    let conversationHistory = [];
-    let messageQueue = [];
-    let processingMessage = false;
-    let apiConfig = {
-      key: "",
-      model: "gpt-4-turbo",
-      systemPrompt: "You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language."
-    };
+<div id="instructions">
+  <span class="close-btn" onclick="closeInstructions()">X</span>
+  <h2>How to Play NODEZ</h2>
+  <p><strong>Objective:</strong> Connect all nodes (N) to create a network and acquire the Master Node ($2222).</p>
+  <p><strong>Controls:</strong></p>
+  <ul>
+    <li>Left-click on a node to select it</li>
+    <li>Right-click on another node or empty space to open action menu</li>
+    <li>Click on obstacles (trees, rocks) to clear them</li>
+    <li>Click on resources ($) to collect them (must be connected to a node)</li>
+    <li>Find the dog (D) for a special bonus!</li>
+  </ul>
+  <p><strong>Economics:</strong></p>
+  <ul>
+    <li>Build refineries ($20) and factories ($100) on resources to generate income</li>
+    <li>Taxes begin on turn 5 and double every 5 turns</li>
+    <li>Complete all your moves each turn (starts at 2, increases every 5 turns)</li>
+  </ul>
+  <p><strong>Win Condition:</strong> Connect all nodes to the Master Node.</p>
+  <button onclick="closeInstructions()">Got it!</button>
+</div>
 
-    // Load API configuration from localStorage
-    function loadAPIConfig() {
-      const savedConfig = localStorage.getItem('biochompsApiConfig');
-      if (savedConfig) {
-        try {
-          const parsedConfig = JSON.parse(savedConfig);
-          apiConfig = { ...apiConfig, ...parsedConfig };
-          updateSystemStatus("API CONFIGURED");
-        } catch (error) {
-          console.error("Error loading API config:", error);
-        }
-      }
+<script>
+let GRID_WIDTH, GRID_HEIGHT;
+const art = {
+  ".": ".",
+  "N": "(N)",
+  "D": "D",
+  "T": "^",
+  "R": "#",
+  "M": "/\\", 
+  "~": "~",
+  "L": "O",
+  "$": "$",
+  "P": "·",
+  "RD": "R",
+  "FT": "F",
+  "HR": "==",
+  "SL": "||"
+};
+
+let gameState = {
+  turn: 1,
+  money: 500,
+  movesRequired: 2,
+  movesLeft: 2,
+  grid: [],
+  nodes: [],
+  resources: [],
+  selectedNode: null,
+  connections: [],
+  refineries: [],
+  factories: [],
+  dogBonus: false,
+  gameWon: false,
+  logisticsTax: 25,
+  nextTaxTurn: 5,
+  taxMultiplier: 1
+};
+
+function calculateGrid() {
+  const display = document.getElementById('ascii-display');
+  GRID_WIDTH = Math.floor((display.clientWidth) / 10);
+  GRID_HEIGHT = Math.floor((display.clientHeight) / 18);
+}
+
+function initGame() {
+  calculateGrid();
+  // Reset game state
+  gameState.turn = 1;
+  gameState.money = 500;
+  gameState.movesLeft = gameState.movesRequired;
+  gameState.movesRequired = 2;
+  gameState.grid = Array.from({length: GRID_HEIGHT}, () => Array(GRID_WIDTH).fill("."));
+  gameState.nodes = [];
+  gameState.resources = [];
+  gameState.selectedNode = null;
+  gameState.connections = [];
+  gameState.refineries = [];
+  gameState.factories = [];
+  gameState.dogBonus = false;
+  gameState.gameWon = false;
+  gameState.logisticsTax = 25;
+  gameState.nextTaxTurn = 5;
+  gameState.taxMultiplier = 1;
+  
+  generateAssets();
+  updateSidebar();
+  renderMap();
+  
+  // Add click event listener for game interactions
+  document.getElementById('ascii-display').addEventListener('click', handleGridClick);
+  document.getElementById('ascii-display').addEventListener('contextmenu', handleContextMenu);
+  document.addEventListener('click', function(e) {
+    if (!document.getElementById('context-menu').contains(e.target)) {
+      document.getElementById('context-menu').style.display = 'none';
     }
+  });
+}
 
-    // Open API configuration modal
-    function configureAPI() {
-      document.getElementById("api-modal").style.display = "block";
-      document.getElementById("api-key").value = apiConfig.key || "";
-      document.getElementById("api-model").value = apiConfig.model || "gpt-4-turbo";
-      document.getElementById("system-prompt").value = apiConfig.systemPrompt;
-    }
+function generateAssets() {
+  placeRandom("T", Math.floor(GRID_WIDTH * GRID_HEIGHT * 0.08));
+  placeRandom("R", Math.floor(GRID_WIDTH * GRID_HEIGHT * 0.04));
+  placeRandom("M", Math.floor(GRID_WIDTH * GRID_HEIGHT * 0.02));
+  placeRandom("~", Math.floor(GRID_WIDTH * GRID_HEIGHT * 0.03));
+  placeRandom("L", Math.floor(GRID_WIDTH * GRID_HEIGHT * 0.01));
+  placeResources(5); // Place 5 resources
+  placeNodes(12);  // 12 nodes as per the design
+  placeDog();
+}
 
-    // Close API configuration modal
-    function closeAPIModal() {
-      document.getElementById("api-modal").style.display = "none";
-    }
+function placeRandom(type, count) {
+  while (count-- > 0) {
+    let x, y;
+    do {
+      x = Math.floor(Math.random() * GRID_WIDTH);
+      y = Math.floor(Math.random() * GRID_HEIGHT);
+    } while (gameState.grid[y][x] != ".");
+    gameState.grid[y][x] = type;
+  }
+}
 
-    // Save API configuration
-    function saveAPIConfig() {
-      const apiKey = document.getElementById("api-key").value.trim();
-      const apiModel = document.getElementById("api-model").value;
-      const systemPrompt = document.getElementById("system-prompt").value.trim();
-      if (!apiKey) {
-        alert("API Key is required for neural link connection!");
-        return;
-      }
-      apiConfig = { key: apiKey, model: apiModel, systemPrompt: systemPrompt };
-      localStorage.setItem('biochompsApiConfig', JSON.stringify(apiConfig));
-      updateSystemStatus("API CONFIGURED");
-      closeAPIModal();
-      addSystemMessage("Neural link configured successfully. Ready for mad science!");
-    }
-
-    // Update system status
-    function updateSystemStatus(status) {
-      document.getElementById("system-status").textContent = status;
-    }
-
-    // Start the chat game
-    function startGame() {
-      scientistName = document.getElementById("scientist-name").value.trim();
-      if (!scientistName) { scientistName = "Dr. Unknown"; }
-      if (!apiConfig.key) {
-        addSystemMessage("WARNING: Neural link not configured. Please configure the API connection first.", true);
-        configureAPI();
-        return;
-      }
-      document.getElementById("user-info").textContent = `USER: DR. ${scientistName.toUpperCase()}`;
-      document.getElementById("start-screen").classList.remove("active");
-      document.getElementById("chat-phase").classList.add("active");
-      conversationHistory = [
-        { role: "system", content: apiConfig.systemPrompt + ` Address the user as Dr. ${scientistName}.` }
-      ];
-      document.getElementById("chat-input").focus();
-      callGptAPI(`Welcome Dr. ${scientistName} to the laboratory. Describe what I can do as a mad scientist in BioChomps.`, true);
-      updateSystemStatus("ONLINE");
-    }
-
-    // Launch the GPT video game by opening it in a new tab
-    function startGptGame() {
-      scientistName = document.getElementById("scientist-name").value.trim();
-      if (!scientistName) { scientistName = "Dr. Unknown"; }
-      document.getElementById("user-info").textContent = `USER: DR. ${scientistName.toUpperCase()}`;
-      // Open the GPT game URL in a new tab/window
-      window.open("https://chatgpt.com/g/g-67d5d8be96288191a9279ca0606ce1d9-biochomps-v1-1", "_blank");
-    }
-
-    // Chat message functions (unchanged)
-    function addSystemMessage(text, isError = false) {
-      const chatMessages = document.getElementById("chat-messages");
-      const messageDiv = document.createElement("div");
-      messageDiv.classList.add("system-message");
-      if (isError) { messageDiv.classList.add("error"); }
-      messageDiv.textContent = `* ${text} *`;
-      chatMessages.appendChild(messageDiv);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    function addUserMessage(text) {
-      const chatMessages = document.getElementById("chat-messages");
-      const messageDiv = document.createElement("div");
-      messageDiv.classList.add("message", "user-message");
-      messageDiv.textContent = text;
-      chatMessages.appendChild(messageDiv);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-      if (!text.startsWith("Welcome Dr.")) {
-        conversationHistory.push({ role: "user", content: text });
-      }
-    }
-
-    function addBotMessage(text) {
-      const chatMessages = document.getElementById("chat-messages");
-      const messageDiv = document.createElement("div");
-      messageDiv.classList.add("message", "bot-message");
-      messageDiv.textContent = text;
-      chatMessages.appendChild(messageDiv);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-      conversationHistory.push({ role: "assistant", content: text });
-    }
-
-    function handleUserInput() {
-      const inputField = document.getElementById("chat-input");
-      const userInput = inputField.value.trim();
-      if (userInput === "") return;
-      addUserMessage(userInput);
-      inputField.value = "";
-      messageQueue.push(userInput);
-      if (!processingMessage) { processMessageQueue(); }
-    }
-
-    async function processMessageQueue() {
-      if (messageQueue.length === 0) {
-        processingMessage = false;
-        return;
-      }
-      processingMessage = true;
-      const message = messageQueue.shift();
-      document.getElementById("typing-indicator").style.display = "block";
-      await callGptAPI(message);
-      document.getElementById("typing-indicator").style.display = "none";
-      setTimeout(() => { processMessageQueue(); }, 500);
-    }
-
-    async function callGptAPI(message, isHidden = false) {
-      updateSystemStatus("PROCESSING");
-      if (!isHidden) {
-        document.getElementById("typing-indicator").style.display = "block";
-      }
-      try {
-        const messages = [...conversationHistory];
-        if (!isHidden) {
-          if (messages[messages.length - 1]?.role !== "user" || messages[messages.length - 1]?.content !== message) {
-            messages.push({ role: "user", content: message });
-          }
-        } else {
-          messages.push({ role: "user", content: message });
-        }
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiConfig.key}`
-          },
-          body: JSON.stringify({
-            model: apiConfig.model,
-            messages: messages,
-            temperature: 0.7,
-            max_tokens: 1000
-          })
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error?.message || 'API request failed');
-        }
-        const data = await response.json();
-        const aiResponse = data.choices[0]?.message?.content || "ERROR: No response generated.";
-        if (!isHidden) {
-          addBotMessage(aiResponse);
-        } else {
-          const firstBotMessage = document.querySelector('.bot-message');
-          if (firstBotMessage) {
-            firstBotMessage.textContent = aiResponse;
-          } else {
-            addBotMessage(aiResponse);
-          }
-        }
-        updateSystemStatus("ONLINE");
-        return aiResponse;
-      } catch (error) {
-        console.error("API Error:", error);
-        updateSystemStatus("ERROR");
-        addSystemMessage(`Neural link error: ${error.message}`, true);
-        const fallbackResponse = "SYSTEM ERROR: Neural link disrupted. Please check configuration and try again.";
-        if (!isHidden) {
-          addBotMessage(fallbackResponse);
-        }
-        return fallbackResponse;
-      } finally {
-        document.getElementById("typing-indicator").style.display = "none";
-      }
-    }
-
-    document.addEventListener("DOMContentLoaded", function() {
-      loadAPIConfig();
-      document.getElementById("send-button").addEventListener("click", handleUserInput);
-      document.getElementById("chat-input").addEventListener("keypress", function(e) {
-        if (e.key === "Enter") { handleUserInput(); }
-      });
-      window.onclick = function(event) {
-        const modal = document.getElementById("api-modal");
-        if (event.target == modal) { closeAPIModal(); }
-      };
-      const terminalElements = document.querySelectorAll(".terminal-content p");
-      terminalElements.forEach(element => {
-        const originalText = element.textContent;
-        element.textContent = "";
-        let i = 0;
-        const typing = setInterval(() => {
-          if (i < originalText.length) {
-            element.textContent += originalText.charAt(i);
-            i++;
-          } else {
-            clearInterval(typing);
-          }
-        }, 30);
-      });
-      setInterval(() => {
-        const elements = document.querySelectorAll(".flicker");
-        elements.forEach(element => {
-          if (Math.random() > 0.99) {
-            element.style.opacity = "0.3";
-            setTimeout(() => { element.style.opacity = "1"; }, 100);
-          }
-        });
-      }, 100);
+function placeResources(count) {
+  while (count-- > 0) {
+    let x, y;
+    do {
+      x = Math.floor(Math.random() * GRID_WIDTH);
+      y = Math.floor(Math.random() * GRID_HEIGHT);
+    } while (gameState.grid[y][x] != ".");
+    gameState.grid[y][x] = "$";
+    gameState.resources.push({
+      x, y, 
+      connected: false, 
+      refineries: 0, 
+      refineriesUpgraded: 0,
+      factory: false, 
+      factoryUpgraded: false
     });
-  </script>
-</body>
-</html>
+  }
+}
+
+function placeNodes(count) {
+  // First place the starting node
+  let x, y;
+  do {
+    x = Math.floor(Math.random() * GRID_WIDTH);
+    y = Math.floor(Math.random() * GRID_HEIGHT);
+  } while (gameState.grid[y][x] != ".");
+  
+  gameState.grid[y][x] = "N";
+  gameState.nodes.push({
+    x, y, 
+    connected: true, // Starting node is already connected
+    cost: 0,  // Starting node is free
+    purchased: true
+  });
+  
+  // Place random priced nodes
+  // 3 low-cost nodes
+  for (let i = 0; i < 3; i++) {
+    placeRandomNode(Math.floor(Math.random() * 150) + 50);
+  }
+  
+  // 3 mid-cost nodes
+  for (let i = 0; i < 3; i++) {
+    placeRandomNode(Math.floor(Math.random() * 150) + 150);
+  }
+  
+  // 2 high-cost nodes
+  placeRandomNode(500);
+  placeRandomNode(1000);
+  
+  // Lastly, place the Master Node
+  placeRandomNode(2222);
+  
+  // Make sure one resource has an easy path to a low-cost node
+  ensureEasyResourcePath();
+}
+
+function placeRandomNode(cost) {
+  let x, y;
+  do {
+    x = Math.floor(Math.random() * GRID_WIDTH);
+    y = Math.floor(Math.random() * GRID_HEIGHT);
+  } while (gameState.grid[y][x] != ".");
+  
+  gameState.grid[y][x] = "N";
+  gameState.nodes.push({
+    x, y, 
+    connected: false,
+    cost: cost,
+    purchased: false  // All nodes except the first need to be purchased
+  });
+}
+
+function ensureEasyResourcePath() {
+  // Find a low-cost node
+  const lowCostNodes = gameState.nodes.filter(node => node.cost <= 150);
+  if (lowCostNodes.length === 0) return;
+  
+  // Find a resource
+  if (gameState.resources.length === 0) return;
+  
+  // Find the closest resource to a low-cost node
+  let closestPair = null;
+  let minDistance = Infinity;
+  
+  for (const node of lowCostNodes) {
+    for (const resource of gameState.resources) {
+      const distance = manhattanDistance(node, resource);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestPair = { node, resource };
+      }
+    }
+  }
+  
+  if (!closestPair) return;
+  
+  // Clear a path between them
+  const { node, resource } = closestPair;
+  const path = calculatePath(node, resource);
+  if (!path) return;
+  
+  // Clear obstacles along the path
+  for (const pos of path) {
+    if (gameState.grid[pos.y][pos.x] === "T" || gameState.grid[pos.y][pos.x] === "R") {
+      gameState.grid[pos.y][pos.x] = ".";
+    }
+  }
+}
+
+function placeDog() {
+  let x, y;
+  do {
+    x = Math.floor(Math.random() * GRID_WIDTH);
+    y = Math.floor(Math.random() * GRID_HEIGHT);
+  } while (gameState.grid[y][x] != ".");
+  gameState.grid[y][x] = "D";
+  gameState.dog = {x, y, acquired: false};
+}
+
+function renderMap() {
+  let output = "";
+  
+  // First pass: render the base map
+  let displayGrid = gameState.grid.map(row => [...row]);
+  
+  // Second pass: add connection paths
+  for (let conn of gameState.connections) {
+    const path = calculatePath(conn.from, conn.to);
+    if (!path) continue;
+    
+    for (let i = 1; i < path.length - 1; i++) {
+      const {x, y} = path[i];
+if (displayGrid[y][x] === "." || displayGrid[y][x] === "P") {
+        // Different path markers based on connection type
+        if (conn.type === "road") displayGrid[y][x] = "P";
+        else if (conn.type === "highway") displayGrid[y][x] = "HR";
+        else if (conn.type === "shippingLane") displayGrid[y][x] = "SL";
+        else if (conn.type === "bridge" && (gameState.grid[y][x] === "~" || gameState.grid[y][x] === "L")) {
+          displayGrid[y][x] = "BR";
+        } else {
+          displayGrid[y][x] = "P";
+        }
+      }
+    }
+  }
+  
+  // Third pass: render refineries and factories
+  for (let refinery of gameState.refineries) {
+    const {x, y, upgraded} = refinery;
+    displayGrid[y][x] = upgraded ? "RU" : "RD";
+  }
+  
+  for (let factory of gameState.factories) {
+    const {x, y, upgraded} = factory;
+    displayGrid[y][x] = upgraded ? "FU" : "FT";
+  }
+  
+  // Fourth pass: generate output string
+  for (let y = 0; y < GRID_HEIGHT; y++) {
+    for (let x = 0; x < GRID_WIDTH; x++) {
+      // Highlight selected node
+      if (gameState.selectedNode && gameState.selectedNode.x === x && gameState.selectedNode.y === y) {
+        output += "[N]";
+      } else {
+        const cellType = displayGrid[y][x];
+        const cellArt = art[cellType] || ".";
+        output += cellArt;
+      }
+    }
+    output += "\n";
+  }
+  
+  document.getElementById('ascii-display').innerText = output;
+}
+
+function updateSidebar() {
+  document.getElementById("turn-info").innerText = `Turn: ${gameState.turn}`;
+  document.getElementById("money-info").innerText = `Money: $${gameState.money}`;
+  document.getElementById("moves-info").innerText = `Moves: ${gameState.movesLeft}/${gameState.movesRequired}`;
+  document.getElementById("income-info").innerText = `Income: $${calculateIncome()}`;
+  document.getElementById("tax-info").innerText = `Tax: $${calculateTax()} (Next: Turn ${gameState.nextTaxTurn})`;
+  document.getElementById("next-turn").disabled = gameState.movesLeft > 0;
+  
+  // Check win condition
+  if (!gameState.gameWon && checkWinCondition()) {
+    gameState.gameWon = true;
+    setTimeout(() => {
+      alert("Congratulations! You've connected all nodes to the Master Node!");
+    }, 100);
+  }
+}
+
+function calculateIncome() {
+  let income = 0;
+  
+  // Income from connected resources with refineries and factories
+  for (const resource of gameState.resources) {
+    if (!resource.connected) continue;
+    
+    let resourceIncome = 0;
+    
+    // Base income from refineries
+    resourceIncome += resource.refineries * 10;
+    
+    // Income from upgraded refineries (doubled)
+    resourceIncome += resource.refineriesUpgraded * 10;
+    
+    // Factory multiplier
+    if (resource.factory) {
+      resourceIncome *= resource.factoryUpgraded ? 4 : 3;
+    }
+    
+    income += resourceIncome;
+  }
+  
+  // Dog bonus
+  if (gameState.dogBonus) {
+    income += 50;
+  }
+  
+  return income;
+}
+
+function calculateTax() {
+  if (gameState.turn < gameState.nextTaxTurn) return 0;
+  return gameState.logisticsTax * gameState.taxMultiplier;
+}
+
+function startGame() {
+  document.getElementById("start-screen").style.display = "none";
+  document.getElementById("game-screen").style.display = "block";
+  initGame();
+}
+
+function showHowToPlay() {
+  document.getElementById("instructions").style.display = "block";
+}
+
+function closeInstructions() {
+  document.getElementById("instructions").style.display = "none";
+}
+
+function nextTurn() {
+  if (gameState.movesLeft > 0) {
+    alert("Finish your moves first!");
+    return;
+  }
+  
+  gameState.turn++;
+  
+  // Apply tax before income
+  let taxAmount = calculateTax();
+  gameState.money -= taxAmount;
+  
+  // Check for tax increase
+  if (gameState.turn === gameState.nextTaxTurn) {
+    gameState.nextTaxTurn += 5;
+    gameState.taxMultiplier *= 2;
+  }
+  
+  // Add income
+  gameState.money += calculateIncome();
+  
+  // Check for bankruptcy
+  if (gameState.money <= 0) {
+    alert("Game Over: You are bankrupt!");
+    location.reload();
+    return;
+  }
+  
+  // Check if moves should increase (every 5 turns)
+  if (gameState.turn % 5 === 0) {
+    gameState.movesRequired += 1;
+  }
+  
+  // Reset moves
+  gameState.movesLeft = gameState.movesRequired;
+  
+  updateSidebar();
+  renderMap();
+  
+  // Clear status message
+  document.getElementById("status-message").innerText = "";
+}
+
+function handleGridClick(e) {
+  // Skip if no moves left
+  if (gameState.movesLeft <= 0) {
+    setStatusMessage("No moves left. Press Next Turn.");
+    return;
+  }
+  
+  // Calculate grid position from click
+  const rect = e.target.getBoundingClientRect();
+  const charWidth = rect.width / GRID_WIDTH;
+  const charHeight = rect.height / GRID_HEIGHT;
+  const x = Math.floor((e.clientX - rect.left) / charWidth);
+  const y = Math.floor((e.clientY - rect.top) / charHeight);
+  
+  // Check for valid coordinates
+  if (x < 0 || x >= GRID_WIDTH || y < 0 || y >= GRID_HEIGHT) {
+    return;
+  }
+  
+  const clickedItem = gameState.grid[y][x];
+  
+  // Handle node selection and connection
+  if (clickedItem === "N") {
+    handleNodeClick(x, y);
+  } 
+  // Handle resource connection
+  else if (clickedItem === "$") {
+    handleResourceClick(x, y);
+  }
+  // Handle obstacle clearing
+  else if (clickedItem === "T") {
+    clearTree(x, y);
+  }
+  else if (clickedItem === "R") {
+    clearRock(x, y);
+  }
+  else if (clickedItem === "M") {
+    buildTunnel(x, y);
+  }
+  // Handle dog interaction
+  else if (clickedItem === "D") {
+    petDog(x, y);
+  }
+}
+
+function handleContextMenu(e) {
+  e.preventDefault();
+  
+  // Hide any existing context menu
+  const contextMenu = document.getElementById('context-menu');
+  contextMenu.style.display = 'none';
+  contextMenu.innerHTML = '';
+  
+  // Calculate grid position from click
+  const rect = e.target.getBoundingClientRect();
+  const charWidth = rect.width / GRID_WIDTH;
+  const charHeight = rect.height / GRID_HEIGHT;
+  const x = Math.floor((e.clientX - rect.left) / charWidth);
+  const y = Math.floor((e.clientY - rect.top) / charHeight);
+  
+  // Check for valid coordinates
+  if (x < 0 || x >= GRID_WIDTH || y < 0 || y >= GRID_HEIGHT) {
+    return;
+  }
+  
+  // If a node is selected, handle connections
+  if (gameState.selectedNode) {
+    const targetItem = gameState.grid[y][x];
+    
+    // Position the context menu
+    contextMenu.style.left = `${e.pageX}px`;
+    contextMenu.style.top = `${e.pageY}px`;
+    
+    // Add menu options based on target
+    if (targetItem === "N") {
+      // Node to node connections
+      const btn1 = document.createElement('button');
+      btn1.innerText = 'Build Road ($15)';
+      btn1.onclick = () => buildConnection(gameState.selectedNode, {x, y}, "road");
+      contextMenu.appendChild(btn1);
+      
+      const btn2 = document.createElement('button');
+      btn2.innerText = 'Build Highway ($Varies)';
+      btn2.onclick = () => buildConnection(gameState.selectedNode, {x, y}, "highway");
+      contextMenu.appendChild(btn2);
+      
+      const btn3 = document.createElement('button');
+      btn3.innerText = 'Build Shipping Lane ($300)';
+      btn3.onclick = () => buildConnection(gameState.selectedNode, {x, y}, "shippingLane");
+      contextMenu.appendChild(btn3);
+    } 
+    else if (targetItem === "$") {
+      // Node to resource connections
+      const btn1 = document.createElement('button');
+      btn1.innerText = 'Build Road ($15)';
+      btn1.onclick = () => connectResource(gameState.selectedNode, {x, y}, "road");
+      contextMenu.appendChild(btn1);
+    }
+    // Check for resource to add refinery/factory
+    const resource = gameState.resources.find(r => r.x === x && r.y === y);
+    if (resource && resource.connected) {
+      if (resource.refineries < 3) {
+        const btn = document.createElement('button');
+        btn.innerText = 'Build Refinery ($20)';
+        btn.onclick = () => buildRefinery(resource);
+        contextMenu.appendChild(btn);
+      }
+      
+      if (resource.refineries === 3 && !resource.factory) {
+        const btn = document.createElement('button');
+        btn.innerText = 'Build Factory ($100)';
+        btn.onclick = () => buildFactory(resource);
+        contextMenu.appendChild(btn);
+      }
+      
+      // Upgrade options
+      if (resource.refineries > 0 && resource.refineriesUpgraded < resource.refineries) {
+        const btn = document.createElement('button');
+        btn.innerText = 'Upgrade Refinery ($40)';
+        btn.onclick = () => upgradeRefinery(resource);
+        contextMenu.appendChild(btn);
+      }
+      
+      if (resource.factory && !resource.factoryUpgraded) {
+        const btn = document.createElement('button');
+        btn.innerText = 'Upgrade Factory ($200)';
+        btn.onclick = () => upgradeFactory(resource);
+        contextMenu.appendChild(btn);
+      }
+    }
+    
+    // Show the menu if it has options
+    if (contextMenu.childNodes.length > 0) {
+      contextMenu.style.display = 'block';
+    }
+  }
+}
+
+function handleNodeClick(x, y) {
+  // Find the clicked node
+  const clickedNode = gameState.nodes.find(node => node.x === x && node.y === y);
+  if (!clickedNode) return;
+  
+  // If node is not purchased, attempt to purchase it
+  if (!clickedNode.purchased) {
+    purchaseNode(clickedNode);
+    return;
+  }
+  
+  // If no node is selected, select this one if it's connected
+  if (!gameState.selectedNode) {
+    if (clickedNode.connected) {
+      gameState.selectedNode = clickedNode;
+      setStatusMessage("Node selected. Right-click to open action menu.");
+      renderMap();
+    } else {
+      setStatusMessage("You can only select connected nodes.");
+    }
+    return;
+  }
+  
+  // If this is the same as selected node, deselect
+  if (gameState.selectedNode === clickedNode) {
+    gameState.selectedNode = null;
+    setStatusMessage("");
+    renderMap();
+    return;
+  }
+  
+  // Else we'll show connection options through context menu when right-clicking
+}
+
+function purchaseNode(node) {
+  // Check if we can afford the node
+  if (gameState.money < node.cost) {
+    setStatusMessage(`Not enough money. This node costs $${node.cost}.`);
+    return;
+  }
+  
+  // Purchase the node
+  gameState.money -= node.cost;
+  node.purchased = true;
+  setStatusMessage(`Node purchased for $${node.cost}!`);
+  gameState.movesLeft--;
+  updateSidebar();
+}
+
+function handleResourceClick(x, y) {
+  // Find if this resource is already connected
+  const resource = gameState.resources.find(r => r.x === x && r.y === y);
+  if (!resource) return;
+  
+  if (!resource.connected) {
+    setStatusMessage("Connect this resource to a node first (right-click).");
+    return;
+  }
+  
+  // Resources are handled through the context menu
+  setStatusMessage("Right-click on the resource to see available actions.");
+}
+
+function buildConnection(fromNode, toPos, connectionType) {
+  const toNode = gameState.nodes.find(n => n.x === toPos.x && n.y === toPos.y);
+  if (!toNode) return;
+  
+  // Check if target node is purchased
+  if (!toNode.purchased) {
+    setStatusMessage("You need to purchase this node first.");
+    document.getElementById('context-menu').style.display = 'none';
+    return;
+  }
+  
+  // Check if target node is already connected
+  if (toNode.connected) {
+    setStatusMessage("This node is already connected.");
+    document.getElementById('context-menu').style.display = 'none';
+    return;
+  }
+  
+  // Calculate the connection cost based on type and path
+  const path = calculatePath(fromNode, toNode);
+  if (!path) {
+    setStatusMessage("Cannot connect: path blocked by obstacles.");
+    document.getElementById('context-menu').style.display = 'none';
+    return;
+  }
+  
+  // Calculate connection cost based on type and path length
+  let connectionCost = 0;
+  
+  if (connectionType === "road") {
+    connectionCost = 15;
+    
+    // Check if road is too long (3 inches on screen = ~30 characters)
+    if (path.length > 30) {
+      setStatusMessage("Road is too long. Use a Highway for longer connections.");
+      document.getElementById('context-menu').style.display = 'none';
+      return;
+    }
+  } else if (connectionType === "highway") {
+    // Highway cost based on distance
+    connectionCost = path.length * 5;
+  } else if (connectionType === "shippingLane") {
+    connectionCost = 300;
+  }
+  
+  // Bridges cost extra where crossing rivers or lakes
+  for (const pos of path) {
+    if (gameState.grid[pos.y][pos.x] === "~" || gameState.grid[pos.y][pos.x] === "L") {
+      connectionCost += 35; // Extra cost for bridge segments
+    }
+  }
+  
+  // Check if we can afford the connection
+  if (gameState.money < connectionCost) {
+    setStatusMessage(`Not enough money. ${connectionType} costs $${connectionCost}.`);
+    document.getElementById('context-menu').style.display = 'none';
+    return;
+  }
+  
+  // Create the connection
+  gameState.money -= connectionCost;
+  toNode.connected = true;
+  gameState.connections.push({from: fromNode, to: toNode, type: connectionType});
+  gameState.movesLeft--;
+  gameState.selectedNode = null;
+  
+  setStatusMessage(`${connectionType} built for $${connectionCost}!`);
+  document.getElementById('context-menu').style.display = 'none';
+  updateSidebar();
+  renderMap();
+}
+
+function connectResource(fromNode, toPos, connectionType) {
+  const resource = gameState.resources.find(r => r.x === toPos.x && r.y === toPos.y);
+  if (!resource) return;
+  
+  // Calculate the connection path
+  const path = calculatePath(fromNode, resource);
+  if (!path) {
+    setStatusMessage("Cannot connect: path blocked by obstacles.");
+    document.getElementById('context-menu').style.display = 'none';
+    return;
+  }
+  
+  // Calculate connection cost based on type and path length
+  let connectionCost = 0;
+  
+  if (connectionType === "road") {
+    connectionCost = 15;
+    
+    // Check if road is too long (3 inches on screen = ~30 characters)
+    if (path.length > 30) {
+      setStatusMessage("Road is too long. Try a different route.");
+      document.getElementById('context-menu').style.display = 'none';
+      return;
+    }
+  }
+  
+  // Bridges cost extra where crossing rivers or lakes
+  for (const pos of path) {
+    if (gameState.grid[pos.y][pos.x] === "~" || gameState.grid[pos.y][pos.x] === "L") {
+      connectionCost += 35; // Extra cost for bridge segments
+    }
+  }
+  
+  // Check if we can afford the connection
+  if (gameState.money < connectionCost) {
+    setStatusMessage(`Not enough money. Connection costs $${connectionCost}.`);
+    document.getElementById('context-menu').style.display = 'none';
+    return;
+  }
+  
+  // Create the connection
+  gameState.money -= connectionCost;
+  resource.connected = true;
+  gameState.connections.push({from: fromNode, to: resource, type: connectionType});
+  gameState.movesLeft--;
+  gameState.selectedNode = null;
+  
+  setStatusMessage(`Resource connected for $${connectionCost}!`);
+  document.getElementById('context-menu').style.display = 'none';
+  updateSidebar();
+  renderMap();
+}
+
+function clearTree(x, y) {
+  // Check if we can afford to clear the tree
+  if (gameState.money < 50) {
+    setStatusMessage("Not enough money. Clearing a tree costs $50.");
+    return;
+  }
+  
+  // Clear the tree
+  gameState.money -= 50;
+  gameState.grid[y][x] = ".";
+  gameState.movesLeft--;
+  
+  setStatusMessage("Tree cleared for $50!");
+  updateSidebar();
+  renderMap();
+}
+
+function clearRock(x, y) {
+  // Check if we can afford to clear the rock
+  if (gameState.money < 150) {
+    setStatusMessage("Not enough money. Clearing a rock costs $150.");
+    return;
+  }
+  
+  // Clear the rock
+  gameState.money -= 150;
+  gameState.grid[y][x] = ".";
+  gameState.movesLeft--;
+  
+  setStatusMessage("Rock cleared for $150!");
+  updateSidebar();
+  renderMap();
+}
+
+function buildTunnel(x, y) {
+  // Check if we can afford to build a tunnel
+  if (gameState.money < 500) {
+    setStatusMessage("Not enough money. Building a tunnel costs $500.");
+    return;
+  }
+  
+  // Build the tunnel through the mountain
+  gameState.money -= 500;
+  gameState.grid[y][x] = ".";
+  gameState.movesLeft--;
+  
+  setStatusMessage("Tunnel built for $500!");
+  updateSidebar();
+  renderMap();
+}
+
+function petDog(x, y) {
+  if (gameState.dogBonus) {
+    setStatusMessage("You've already pet the dog!");
+    return;
+  }
+  
+  gameState.dogBonus = true;
+  gameState.movesLeft--;
+  
+  setStatusMessage("You pet the dog! +$50 income per turn.");
+  updateSidebar();
+  renderMap();
+}
+
+function buildRefinery(resource) {
+  // Check if we can afford to build a refinery
+  if (gameState.money < 20) {
+    setStatusMessage("Not enough money. Building a refinery costs $20.");
+    document.getElementById('context-menu').style.display = 'none';
+    return;
+  }
+  
+  // Build the refinery
+  gameState.money -= 20;
+  resource.refineries += 1;
+  gameState.refineries.push({x: resource.x, y: resource.y, upgraded: false});
+  gameState.movesLeft--;
+  
+  setStatusMessage("Refinery built for $20! +$10 income per turn.");
+  document.getElementById('context-menu').style.display = 'none';
+  updateSidebar();
+  renderMap();
+}
+
+function upgradeRefinery(resource) {
+  // Check if we can afford to upgrade
+  if (gameState.money < 40) {
+    setStatusMessage("Not enough money. Upgrading a refinery costs $40.");
+    document.getElementById('context-menu').style.display = 'none';
+    return;
+  }
+  
+  // Upgrade the refinery
+  gameState.money -= 40;
+  resource.refineriesUpgraded += 1;
+  
+  // Find and upgrade a non-upgraded refinery
+  const refinery = gameState.refineries.find(r => 
+    r.x === resource.x && r.y === resource.y && !r.upgraded);
+  if (refinery) refinery.upgraded = true;
+  
+  gameState.movesLeft--;
+  
+  setStatusMessage("Refinery upgraded for $40! Income doubled.");
+  document.getElementById('context-menu').style.display = 'none';
+  updateSidebar();
+  renderMap();
+}
+
+function buildFactory(resource) {
+  // Check if we can afford to build a factory
+  if (gameState.money < 100) {
+    setStatusMessage("Not enough money. Building a factory costs $100.");
+    document.getElementById('context-menu').style.display = 'none';
+    return;
+  }
+  
+  // Build the factory
+  gameState.money -= 100;
+  resource.factory = true;
+  gameState.factories.push({x: resource.x, y: resource.y, upgraded: false});
+  gameState.movesLeft--;
+  
+  setStatusMessage("Factory built for $100! Income multiplied by 3.");
+  document.getElementById('context-menu').style.display = 'none';
+  updateSidebar();
+  renderMap();
+}
+
+function upgradeFactory(resource) {
+  // Check if we can afford to upgrade
+  if (gameState.money < 200) {
+    setStatusMessage("Not enough money. Upgrading a factory costs $200.");
+    document.getElementById('context-menu').style.display = 'none';
+    return;
+  }
+  
+  // Upgrade the factory
+  gameState.money -= 200;
+  resource.factoryUpgraded = true;
+  
+  // Find and upgrade the factory
+  const factory = gameState.factories.find(f => 
+    f.x === resource.x && f.y === resource.y);
+  if (factory) factory.upgraded = true;
+  
+  gameState.movesLeft--;
+  
+  setStatusMessage("Factory upgraded for $200! Income multiplier increased to 4x.");
+  document.getElementById('context-menu').style.display = 'none';
+  updateSidebar();
+  renderMap();
+}
+
+function calculatePath(from, to) {
+  // A* pathfinding algorithm
+  const openSet = [];
+  const closedSet = new Set();
+  const cameFrom = new Map();
+  
+  // Cost from start to current
+  const gScore = new Map();
+  gScore.set(`${from.x},${from.y}`, 0);
+  
+  // Estimated total cost from start to goal through current
+  const fScore = new Map();
+  fScore.set(`${from.x},${from.y}`, manhattanDistance(from, to));
+  
+  // Start with the starting point
+  openSet.push(from);
+  
+  while (openSet.length > 0) {
+    // Find the node in openSet with the lowest fScore
+    let current = openSet.reduce((lowest, node) => {
+      const key = `${node.x},${node.y}`;
+      return fScore.get(key) < fScore.get(`${lowest.x},${lowest.y}`) ? node : lowest;
+    }, openSet[0]);
+    
+    // If we've reached the destination, reconstruct and return the path
+    if (current.x === to.x && current.y === to.y) {
+      const path = [current];
+      while (cameFrom.has(`${current.x},${current.y}`)) {
+        current = cameFrom.get(`${current.x},${current.y}`);
+        path.unshift(current);
+      }
+      return path;
+    }
+    
+    // Remove current from openSet
+    openSet.splice(openSet.findIndex(node => node.x === current.x && node.y === current.y), 1);
+    closedSet.add(`${current.x},${current.y}`);
+    
+    // Check all neighbors
+    const neighbors = getNeighbors(current);
+    for (const neighbor of neighbors) {
+      const neighborKey = `${neighbor.x},${neighbor.y}`;
+      
+      // Skip if this neighbor is already evaluated
+      if (closedSet.has(neighborKey)) continue;
+      
+      // Skip if this neighbor is an impassable obstacle
+      if (["M"].includes(gameState.grid[neighbor.y][neighbor.x])) continue;
+      
+      // Calculate tentative gScore
+      const tentativeGScore = (gScore.get(`${current.x},${current.y}`) || Infinity) + 1;
+      
+      // Add to open set if not there
+      if (!openSet.some(node => node.x === neighbor.x && node.y === neighbor.y)) {
+        openSet.push(neighbor);
+      } else if (tentativeGScore >= (gScore.get(neighborKey) || Infinity)) {
+        // This is not a better path
+        continue;
+      }
+      
+      // This path is the best until now
+      cameFrom.set(neighborKey, current);
+      gScore.set(neighborKey, tentativeGScore);
+      fScore.set(neighborKey, tentativeGScore + manhattanDistance(neighbor, to));
+    }
+  }
+  
+  // No path found
+  return null;
+}
+
+function getNeighbors(pos) {
+  const {x, y} = pos;
+  const neighbors = [];
+  
+  // Cardinal directions
+  if (x > 0) neighbors.push({x: x-1, y});
+  if (x < GRID_WIDTH-1) neighbors.push({x: x+1, y});
+  if (y > 0) neighbors.push({x, y: y-1});
+  if (y < GRID_HEIGHT-1) neighbors.push({x, y: y+1});
+  
+  return neighbors;
+}
+
+function manhattanDistance(pos1, pos2) {
+  return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
+}
+
+function setStatusMessage(message) {
+  document.getElementById("status-message").innerText = message;
+}
+
+function checkWinCondition() {
+  // Game is won when all nodes are connected
+  return gameState.nodes.every(node => node.connected);
+}
+
+// Add event listener for window resize
+window.addEventListener('resize', function() {
+  calculateGrid();
+  renderMap();
+});
+
+// Initialize the game when window loads
+window.onload = function() {
+  // Game will start when user clicks the START GAME button
+};
