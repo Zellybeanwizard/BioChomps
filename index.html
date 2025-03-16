@@ -413,15 +413,6 @@
             color: #000;
         }
         
-        /* Hidden iframe for the GPT */
-        #gpt-frame {
-            display: none;
-            width: 1px;
-            height: 1px;
-            opacity: 0;
-            position: absolute;
-        }
-        
         /* Loading indicator */
         .typing-indicator {
             display: none;
@@ -463,6 +454,79 @@
             66% { width: 2em; }
             100% { width: 3em; }
         }
+        
+        /* API Settings Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+        
+        .modal-content {
+            background-color: #000;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #33ff33;
+            width: 80%;
+            max-width: 500px;
+            animation: modalAppear 0.3s ease-out;
+        }
+        
+        @keyframes modalAppear {
+            from { opacity: 0; transform: translateY(-50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .close-modal {
+            color: #33ff33;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close-modal:hover {
+            color: #ff33ff;
+        }
+        
+        .api-form label {
+            display: block;
+            margin: 10px 0 5px;
+        }
+        
+        .api-form input, .api-form select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            background-color: #000;
+            border: 1px solid #33ff33;
+            color: #33ff33;
+            font-family: 'VT323', 'Courier New', monospace;
+        }
+        
+        .system-message.error {
+            color: #ff5555;
+        }
+        
+        /* Settings button in status bar */
+        #api-settings-button {
+            background-color: transparent;
+            color: #33ff33;
+            border: none;
+            cursor: pointer;
+            font-family: 'VT323', 'Courier New', monospace;
+            padding: 0 5px;
+        }
+        
+        #api-settings-button:hover {
+            color: #ff33ff;
+        }
     </style>
 </head>
 <body>
@@ -473,8 +537,8 @@
         
         <div class="terminal-content">
             <div class="game-header flicker">
-	<div class="ascii-art">
-                    ██████╗ ██╗ ██████╗  ██████╗██╗  ██╗ ██████╗ ███╗   ███╗██████╗ ███████╗
+                <div class="ascii-art">
+                    ██████╗ ██╗ ██████╗  ██████╗██╗  ██║ ██████╗ ███╗   ███╗██████╗ ███████╗
                     ██╔══██╗██║██╔═══██╗██╔════╝██║  ██║██╔═══██╗████╗ ████║██╔══██╗██╔════╝
                     ██████╔╝██║██║   ██║██║     ███████║██║   ██║██╔████╔██║██████╔╝███████╗
                     ██╔══██╗██║██║   ██║██║     ██╔══██║██║   ██║██║╚██╔╝██║██╔═══╝ ╚════██║
@@ -497,6 +561,7 @@
                     <input type="text" id="scientist-name" class="user-input" placeholder="Enter your mad scientist name">
                 </div>
                 <div style="margin-top: 20px; text-align: center;">
+                    <button onclick="configureAPI()" class="button">CONFIGURE AI NEURAL LINK</button>
                     <button onclick="startGame()" class="button">BEGIN EXPERIMENTATION</button>
                 </div>
             </div>
@@ -525,27 +590,129 @@
             <!-- Status Bar -->
             <div class="status-bar">
                 <div id="user-info">USER: [UNDEFINED]</div>
-                <div id="system-info">SYSTEM: ONLINE | CONNECTION: SECURE</div>
+                <div id="system-info">
+                    SYSTEM: <span id="system-status">STANDBY</span>
+                    <button id="api-settings-button" onclick="configureAPI()">⚙️</button>
+                </div>
             </div>
         </div>
     </div>
     
-    <!-- Hidden iframe for GPT interaction -->
-    <iframe id="gpt-frame" src="about:blank" title="GPT Interface"></iframe>
+    <!-- API Configuration Modal -->
+    <div id="api-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeAPIModal()">&times;</span>
+            <h2 style="text-align: center; color: #33ff33;">NEURAL LINK CONFIGURATION</h2>
+            <form id="api-form" class="api-form">
+                <label for="api-key">API KEY:</label>
+                <input type="password" id="api-key" placeholder="Enter your OpenAI API key">
+                
+                <label for="api-model">AI MODEL:</label>
+                <select id="api-model">
+                    <option value="gpt-4-turbo">GPT-4 Turbo (Recommended)</option>
+                    <option value="gpt-4">GPT-4</option>
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster)</option>
+                </select>
+                
+                <label for="system-prompt">SYSTEM INITIALIZATION:</label>
+                <input type="text" id="system-prompt" value="You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language.">
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <button type="button" onclick="saveAPIConfig()" class="button">INITIALIZE NEURAL LINK</button>
+                </div>
+            </form>
+        </div>
+    </div>
     
     <script>
-        // Variables to manage the chat interface
+        // Variables to manage the chat interface and API
         let scientistName = "";
         let conversationHistory = [];
-        let gptFrame = null;
         let messageQueue = [];
         let processingMessage = false;
+        let apiConfig = {
+            key: "",
+            model: "gpt-4-turbo",
+            systemPrompt: "You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language."
+        };
+        
+        // Check for saved API configuration
+        function loadAPIConfig() {
+            const savedConfig = localStorage.getItem('biochompsApiConfig');
+            if (savedConfig) {
+                try {
+                    const parsedConfig = JSON.parse(savedConfig);
+                    apiConfig = { ...apiConfig, ...parsedConfig };
+                    updateSystemStatus("API CONFIGURED");
+                } catch (error) {
+                    console.error("Error loading API config:", error);
+                }
+            }
+        }
+        
+        // Open API configuration modal
+        function configureAPI() {
+            const modal = document.getElementById("api-modal");
+            const apiKeyInput = document.getElementById("api-key");
+            const apiModelSelect = document.getElementById("api-model");
+            const systemPromptInput = document.getElementById("system-prompt");
+            
+            // Pre-fill with current values
+            apiKeyInput.value = apiConfig.key || "";
+            apiModelSelect.value = apiConfig.model || "gpt-4-turbo";
+            systemPromptInput.value = apiConfig.systemPrompt || "You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language.";
+            
+            modal.style.display = "block";
+        }
+        
+        // Close API configuration modal
+        function closeAPIModal() {
+            document.getElementById("api-modal").style.display = "none";
+        }
+        
+        // Save API configuration
+        function saveAPIConfig() {
+            const apiKey = document.getElementById("api-key").value.trim();
+            const apiModel = document.getElementById("api-model").value;
+            const systemPrompt = document.getElementById("system-prompt").value.trim();
+            
+            if (!apiKey) {
+                alert("API Key is required for neural link connection!");
+                return;
+            }
+            
+            apiConfig = {
+                key: apiKey,
+                model: apiModel,
+                systemPrompt: systemPrompt
+            };
+            
+            // Save to localStorage (encrypt in a real app)
+            localStorage.setItem('biochompsApiConfig', JSON.stringify(apiConfig));
+            
+            updateSystemStatus("API CONFIGURED");
+            closeAPIModal();
+            
+            addSystemMessage("Neural link configured successfully. Ready for mad science!");
+        }
+        
+        // Update system status in UI
+        function updateSystemStatus(status) {
+            document.getElementById("system-status").textContent = status;
+        }
         
         // Function to handle game start
         function startGame() {
             scientistName = document.getElementById("scientist-name").value.trim();
             if (!scientistName) {
                 scientistName = "Dr. Unknown";
+            }
+            
+            // Check if API is configured
+            if (!apiConfig.key) {
+                addSystemMessage("WARNING: Neural link not configured. Please configure the API connection first.", true);
+                configureAPI();
+                return;
             }
             
             // Update UI with scientist name
@@ -556,46 +723,28 @@
             document.getElementById("chat-phase").classList.add("active");
             document.getElementById("chat-container").style.display = "block";
             
-            // Load the GPT iframe
-            loadGPTInterface();
+            // Initialize the conversation with system prompt
+            conversationHistory = [
+                { role: "system", content: apiConfig.systemPrompt + ` Address the user as Dr. ${scientistName}.` }
+            ];
             
             // Focus on chat input
             document.getElementById("chat-input").focus();
             
-            // Add welcome message specific to scientist name
-            addBotMessage(`Welcome, Dr. ${scientistName}! Your laboratory is fully operational. What genetic experiments shall we conduct today?`);
-        }
-        
-        // Function to load the GPT interface in the hidden iframe
-        function loadGPTInterface() {
-            const gptFrame = document.getElementById("gpt-frame");
-            gptFrame.src = "https://chatgpt.com/g/g-67d5d8be96288191a9279ca0606ce1d9-biochomps-v1-1";
+            // Send initial API request to get welcome message
+            callGptAPI(`Welcome Dr. ${scientistName} to the laboratory. Describe what I can do as a mad scientist in BioChomps.`, true);
             
-            // Listen for messages from the iframe
-            window.addEventListener("message", receiveMessage);
-            
-            // Display connection message
-            addSystemMessage("Establishing neural link to BioChomps AI mainframe...");
-            
-            // Simulate connection delay
-            setTimeout(() => {
-                addSystemMessage("Neural link established. BioChomps AI ready for interaction.");
-            }, 2000);
-        }
-        
-        // Function to handle receiving messages from the GPT iframe
-        function receiveMessage(event) {
-            // This is a placeholder for the actual message handling
-            // In a real implementation, we would process messages from the GPT iframe here
-            // This is challenging because the ChatGPT iframe doesn't expose a standard API
-            // For now, we'll simulate responses
+            updateSystemStatus("ONLINE");
         }
         
         // Function to add a system message to the chat
-        function addSystemMessage(text) {
+        function addSystemMessage(text, isError = false) {
             const chatMessages = document.getElementById("chat-messages");
             const messageDiv = document.createElement("div");
             messageDiv.classList.add("system-message");
+            if (isError) {
+                messageDiv.classList.add("error");
+            }
             messageDiv.textContent = `* ${text} *`;
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -610,8 +759,10 @@
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
             
-            // Store in conversation history
-            conversationHistory.push({ role: "user", content: text });
+            // Store in conversation history (skip if it's the initial hidden prompt)
+            if (!text.startsWith("Welcome Dr.")) {
+                conversationHistory.push({ role: "user", content: text });
+            }
         }
         
         // Function to add a bot message to the chat
@@ -662,9 +813,8 @@
             // Show typing indicator
             document.getElementById("typing-indicator").style.display = "block";
             
-            // We simulate GPT response generation here
-            // In a real implementation, we would send the message to the GPT API
-            await simulateGPTResponse(message);
+            // Call the GPT API
+            await callGptAPI(message);
             
             // Hide typing indicator
             document.getElementById("typing-indicator").style.display = "none";
@@ -675,83 +825,227 @@
             }, 500);
         }
         
-        // Function to simulate GPT response generation
-        async function simulateGPTResponse(message) {
-            // Generate a response based on common BioChomps themes
-            let response = "";
+        // Function to call the GPT API
+        async function callGptAPI(message, isHidden = false) {
+            updateSystemStatus("PROCESSING");
             
-            // Wait time proportional to message length to simulate thinking
-            const thinkTime = Math.min(3000, 500 + message.length * 30);
+            if (!isHidden) {
+                // Show thinking indicator for user-visible messages
+                document.getElementById("typing-indicator").style.display = "block";
+            }
             
-            return new Promise(resolve => {
-                setTimeout(() => {
-                    // In a real implementation, we would call the GPT API here
-                    // For now, we generate a themed response based on keywords
+            try {
+                // Create the messages array for the API call
+                const messages = [...conversationHistory];
+                
+                // Add the current message if it's not already in the history
+                if (!isHidden) {
+                    if (messages[messages.length - 1]?.role !== "user" || 
+                        messages[messages.length - 1]?.content !== message) {
+                        messages.push({ role: "user", content: message });
+                    }
+                } else {
+                    // For hidden messages (like the welcome message), add it but don't show in UI
+                    messages.push({ role: "user", content: message });
+                }
+                
+                // Make the API call
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiConfig.key}`
+                    },
+body: JSON.stringify({
+                        model: apiConfig.model,
+                        messages: messages,
+                        temperature: 0.7,
+                        max_tokens: 1000
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error?.message || 'API request failed');
+                }
+                
+                const data = await response.json();
+                const aiResponse = data.choices[0]?.message?.content || "ERROR: No response generated.";
+                
+                // Add to conversation history if it's not the initial hidden prompt
+                if (!isHidden) {
+                    addBotMessage(aiResponse);
+                } else {
+                    // For the welcome message, we still show it in the UI but mark it differently in history
+                    const firstBotMessage = document.querySelector('.bot-message');
+                    if (firstBotMessage) {
+                        firstBotMessage.textContent = aiResponse;
+                    } else {
+                        addBotMessage(aiResponse);
+                    }
+                }
+                
+                updateSystemStatus("ONLINE");
+                return aiResponse;
                     
-                    if (message.toLowerCase().includes("create") || message.toLowerCase().includes("make") || 
-                        message.toLowerCase().includes("build") || message.toLowerCase().includes("design")) {
-                        response = `Excellent idea, Dr. ${scientistName}! To create a new biological specimen, we'll need to:
-1. Extract DNA from a suitable donor organism
-2. Splice in genes for the desired traits
-3. Incubate in the growth chamber for 3-5 cycles
-
-What primary characteristics would you like your creation to possess?`;
-                    } 
-                    else if (message.toLowerCase().includes("battle") || message.toLowerCase().includes("fight") || 
-                             message.toLowerCase().includes("combat") || message.toLowerCase().includes("versus")) {
-                        response = `Initiating battle protocols! Your current champion creature is ready for combat.
-                        
-Select your opponent difficulty:
-- BASIC (recommended for new specimens)
-- ADVANCED (for evolved creatures)
-- ELITE (only attempt with fully optimized specimens)
-
-Or would you prefer to view the battle logs from previous experiments first?`;
-                    }
-                    else if (message.toLowerCase().includes("mutate") || message.toLowerCase().includes("evolve") || 
-                             message.toLowerCase().includes("enhance") || message.toLowerCase().includes("upgrade")) {
-                        response = `Mutation protocols engaged, Dr. ${scientistName}! 
-
-Your specimen can evolve along several pathways:
-- STRENGTH enhancement (+15% combat effectiveness, -5% lifespan)
-- INTELLIGENCE augmentation (+20% problem solving, -10% regeneration)
-- RESILIENCE development (+25% survival rate, -8% reproductive capacity)
-
-Which evolutionary path shall we pursue? The genetic recombination chamber is prepared and awaiting your command.`;
-                    }
-                    else if (message.toLowerCase().includes("help") || message.toLowerCase().includes("tutorial") || 
-                             message.toLowerCase().includes("how") || message.toLowerCase().includes("guide")) {
-                        response = `BIOCHOMPS SYSTEM MANUAL - QUICK REFERENCE:
-
-As Head Scientist, you can:
-- CREATE new biological specimens using the genetic lab
-- EVOLVE existing creatures through mutation chambers
-- BATTLE your creations against other specimens
-- RESEARCH new genetic components in the biotech library
-- EXPLORE abandoned labs for rare genetic material
-
-Use specific commands like "create amphibian" or "battle arena" for optimal results. The fate of biological science rests in your capable hands, Dr. ${scientistName}!`;
-                    }
-                    else {
-                        response = `Fascinating directive, Dr. ${scientistName}. The laboratory computers are processing your request.
-
-Our genetic database suggests several approaches to this matter. Would you like me to:
-1. Run a simulation of potential outcomes
-2. Prepare the genetic extraction equipment
-3. Access the archives for similar experiments
-4. Calculate resource requirements for this procedure
-
-Your scientific brilliance continues to impress the entire research community.`;
-                    }
-                    
-                    addBotMessage(response);
-                    resolve();
-                }, thinkTime);
-            });
+            } catch (error) {
+                console.error("API Error:", error);
+                updateSystemStatus("ERROR");
+                addSystemMessage(`Neural link error: ${error.message}`, true);
+                
+                // Fallback response
+                const fallbackResponse = "SYSTEM ERROR: Neural link disrupted. Please check configuration and try again.";
+                if (!isHidden) {
+                    addBotMessage(fallbackResponse);
+                }
+                
+                return fallbackResponse;
+            } finally {
+                document.getElementById("typing-indicator").style.display = "none";
+            }
         }
         
-        // Set up event listeners once the page is loaded
+        // Function to implement stream response from GPT API (optional enhancement)
+        async function streamGptResponse(message) {
+            updateSystemStatus("PROCESSING");
+            document.getElementById("typing-indicator").style.display = "block";
+            
+            try {
+                // Create message for streaming response
+                const messages = [...conversationHistory];
+                messages.push({ role: "user", content: message });
+                
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiConfig.key}`
+                    },
+                    body: JSON.stringify({
+                        model: apiConfig.model,
+                        messages: messages,
+                        temperature: 0.7,
+                        max_tokens: 1000,
+                        stream: true
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error?.message || 'API request failed');
+                }
+                
+                // Create new message div for streaming response
+                const chatMessages = document.getElementById("chat-messages");
+                const messageDiv = document.createElement("div");
+                messageDiv.classList.add("message", "bot-message");
+                messageDiv.textContent = "";
+                chatMessages.appendChild(messageDiv);
+                
+                // Hide typing indicator as we'll show text streaming in
+                document.getElementById("typing-indicator").style.display = "none";
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let responseText = "";
+                
+                // Function to process stream
+                async function readStream() {
+                    try {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            
+                            if (done) {
+                                break;
+                            }
+                            
+                            // Process the chunk of data
+                            const chunk = decoder.decode(value);
+                            const lines = chunk.split('\n').filter(line => line.trim() !== '');
+                            
+                            for (const line of lines) {
+                                if (line.startsWith('data:')) {
+                                    const dataLine = line.slice(5).trim();
+                                    
+                                    if (dataLine === '[DONE]') {
+                                        continue;
+                                    }
+                                    
+                                    try {
+                                        const data = JSON.parse(dataLine);
+                                        const contentDelta = data.choices[0]?.delta?.content;
+                                        
+                                        if (contentDelta) {
+                                            responseText += contentDelta;
+                                            messageDiv.textContent = responseText;
+                                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                                        }
+                                    } catch (e) {
+                                        console.error("Error parsing stream data:", e);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Add complete response to conversation history
+                        conversationHistory.push({ role: "assistant", content: responseText });
+                        updateSystemStatus("ONLINE");
+                        
+                    } catch (error) {
+                        console.error("Stream reading error:", error);
+                        messageDiv.textContent += "\n[TRANSMISSION INTERRUPTED]";
+                        updateSystemStatus("ERROR");
+                    }
+                }
+                
+                // Start reading the stream
+                await readStream();
+                
+            } catch (error) {
+                console.error("Streaming API Error:", error);
+                updateSystemStatus("ERROR");
+                addSystemMessage(`Neural link error: ${error.message}`, true);
+                addBotMessage("SYSTEM ERROR: Neural link disrupted. Please check configuration and try again.");
+            }
+        }
+        
+        // Function to test the API connection
+        async function testApiConnection() {
+            if (!apiConfig.key) {
+                addSystemMessage("Cannot test connection: API key not configured", true);
+                return false;
+            }
+            
+            try {
+                updateSystemStatus("TESTING");
+                
+                const response = await fetch('https://api.openai.com/v1/models', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiConfig.key}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API connection failed: ${response.status}`);
+                }
+                
+                updateSystemStatus("READY");
+                return true;
+                
+            } catch (error) {
+                console.error("API Connection Test Error:", error);
+                updateSystemStatus("ERROR");
+                addSystemMessage(`API connection test failed: ${error.message}`, true);
+                return false;
+            }
+        }
+        
+        // Load API configuration when page loads
         document.addEventListener("DOMContentLoaded", function() {
+            // Load saved API configuration
+            loadAPIConfig();
+            
             // Set up the send button click event
             document.getElementById("send-button").addEventListener("click", handleUserInput);
             
@@ -761,6 +1055,14 @@ Your scientific brilliance continues to impress the entire research community.`;
                     handleUserInput();
                 }
             });
+            
+            // Close modal when clicking outside of it
+            window.onclick = function(event) {
+                const modal = document.getElementById("api-modal");
+                if (event.target == modal) {
+                    closeAPIModal();
+                }
+            };
             
             // Add realistic terminal typing effects
             const terminalElements = document.querySelectorAll(".terminal-content p");
@@ -792,19 +1094,6 @@ Your scientific brilliance continues to impress the entire research community.`;
                 });
             }, 100);
         });
-        
-        // Function to implement a real GPT API connection (for future implementation)
-        async function connectToGPTAPI(message) {
-            // This function would be implemented when connecting to the actual GPT API
-            // For now, it's just a placeholder
-            
-            // In a real implementation, we would:
-            // 1. Send the message to a backend server that handles API keys securely
-            // 2. The server would call the GPT API with your custom GPT ID
-            // 3. Return the response to this function
-            
-            return "API response would appear here";
-        }
     </script>
 </body>
 </html>
