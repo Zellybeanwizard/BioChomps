@@ -185,15 +185,6 @@
       90% { height: 5px; }
       100% { height: 0; }
     }
-    /* GPT Integration Styles for video game phase */
-    #gpt-game-phase {
-      height: 100%;
-    }
-    #gpt-game-phase iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
   </style>
 </head>
 <body>
@@ -253,11 +244,6 @@
         </div>
       </div>
 
-      <!-- GPT Video Game Phase -->
-      <div id="gpt-game-phase" class="game-phase">
-        <iframe id="gpt-iframe" src="https://chatgpt.com/g/g-67d5d8be96288191a9279ca0606ce1d9-biochomps-v1-1"></iframe>
-      </div>
-
       <!-- Status Bar -->
       <div class="status-bar">
         <div id="user-info">USER: [UNDEFINED]</div>
@@ -270,7 +256,7 @@
   </div>
 
   <!-- API Configuration Modal -->
-  <div id="api-modal" class="modal">
+  <div id="api-modal" class="modal" style="display:none;">
     <div class="modal-content">
       <span class="close-modal" onclick="closeAPIModal()">&times;</span>
       <h2 style="text-align: center; color: #33ff33;">NEURAL LINK CONFIGURATION</h2>
@@ -293,7 +279,6 @@
   </div>
 
   <script>
-    // Variables to manage the chat interface and API
     let scientistName = "";
     let conversationHistory = [];
     let messageQueue = [];
@@ -304,7 +289,7 @@
       systemPrompt: "You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language."
     };
 
-    // Check for saved API configuration
+    // Load API configuration from localStorage
     function loadAPIConfig() {
       const savedConfig = localStorage.getItem('biochompsApiConfig');
       if (savedConfig) {
@@ -320,14 +305,10 @@
 
     // Open API configuration modal
     function configureAPI() {
-      const modal = document.getElementById("api-modal");
-      const apiKeyInput = document.getElementById("api-key");
-      const apiModelSelect = document.getElementById("api-model");
-      const systemPromptInput = document.getElementById("system-prompt");
-      apiKeyInput.value = apiConfig.key || "";
-      apiModelSelect.value = apiConfig.model || "gpt-4-turbo";
-      systemPromptInput.value = apiConfig.systemPrompt || "You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language.";
-      modal.style.display = "block";
+      document.getElementById("api-modal").style.display = "block";
+      document.getElementById("api-key").value = apiConfig.key || "";
+      document.getElementById("api-model").value = apiConfig.model || "gpt-4-turbo";
+      document.getElementById("system-prompt").value = apiConfig.systemPrompt;
     }
 
     // Close API configuration modal
@@ -344,28 +325,22 @@
         alert("API Key is required for neural link connection!");
         return;
       }
-      apiConfig = {
-        key: apiKey,
-        model: apiModel,
-        systemPrompt: systemPrompt
-      };
+      apiConfig = { key: apiKey, model: apiModel, systemPrompt: systemPrompt };
       localStorage.setItem('biochompsApiConfig', JSON.stringify(apiConfig));
       updateSystemStatus("API CONFIGURED");
       closeAPIModal();
       addSystemMessage("Neural link configured successfully. Ready for mad science!");
     }
 
-    // Update system status in UI
+    // Update system status
     function updateSystemStatus(status) {
       document.getElementById("system-status").textContent = status;
     }
 
-    // Function to handle game start (for chat mode)
+    // Start the chat game
     function startGame() {
       scientistName = document.getElementById("scientist-name").value.trim();
-      if (!scientistName) {
-        scientistName = "Dr. Unknown";
-      }
+      if (!scientistName) { scientistName = "Dr. Unknown"; }
       if (!apiConfig.key) {
         addSystemMessage("WARNING: Neural link not configured. Please configure the API connection first.", true);
         configureAPI();
@@ -374,7 +349,6 @@
       document.getElementById("user-info").textContent = `USER: DR. ${scientistName.toUpperCase()}`;
       document.getElementById("start-screen").classList.remove("active");
       document.getElementById("chat-phase").classList.add("active");
-      document.getElementById("chat-container").style.display = "block";
       conversationHistory = [
         { role: "system", content: apiConfig.systemPrompt + ` Address the user as Dr. ${scientistName}.` }
       ];
@@ -383,28 +357,21 @@
       updateSystemStatus("ONLINE");
     }
 
-    // Function to launch the GPT video game mode (iframe integration)
+    // Launch the GPT video game by opening it in a new tab
     function startGptGame() {
       scientistName = document.getElementById("scientist-name").value.trim();
-      if (!scientistName) {
-        scientistName = "Dr. Unknown";
-      }
+      if (!scientistName) { scientistName = "Dr. Unknown"; }
       document.getElementById("user-info").textContent = `USER: DR. ${scientistName.toUpperCase()}`;
-      // Hide start screen and chat-phase (if visible)
-      document.getElementById("start-screen").classList.remove("active");
-      document.getElementById("chat-phase").classList.remove("active");
-      // Show the GPT video game phase
-      document.getElementById("gpt-game-phase").classList.add("active");
+      // Open the GPT game URL in a new tab/window
+      window.open("https://chatgpt.com/g/g-67d5d8be96288191a9279ca0606ce1d9-biochomps-v1-1", "_blank");
     }
 
-    // Functions to add messages and process chat (existing functionality)
+    // Chat message functions (unchanged)
     function addSystemMessage(text, isError = false) {
       const chatMessages = document.getElementById("chat-messages");
       const messageDiv = document.createElement("div");
       messageDiv.classList.add("system-message");
-      if (isError) {
-        messageDiv.classList.add("error");
-      }
+      if (isError) { messageDiv.classList.add("error"); }
       messageDiv.textContent = `* ${text} *`;
       chatMessages.appendChild(messageDiv);
       chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -439,9 +406,7 @@
       addUserMessage(userInput);
       inputField.value = "";
       messageQueue.push(userInput);
-      if (!processingMessage) {
-        processMessageQueue();
-      }
+      if (!processingMessage) { processMessageQueue(); }
     }
 
     async function processMessageQueue() {
@@ -454,9 +419,7 @@
       document.getElementById("typing-indicator").style.display = "block";
       await callGptAPI(message);
       document.getElementById("typing-indicator").style.display = "none";
-      setTimeout(() => {
-        processMessageQueue();
-      }, 500);
+      setTimeout(() => { processMessageQueue(); }, 500);
     }
 
     async function callGptAPI(message, isHidden = false) {
@@ -467,8 +430,7 @@
       try {
         const messages = [...conversationHistory];
         if (!isHidden) {
-          if (messages[messages.length - 1]?.role !== "user" || 
-              messages[messages.length - 1]?.content !== message) {
+          if (messages[messages.length - 1]?.role !== "user" || messages[messages.length - 1]?.content !== message) {
             messages.push({ role: "user", content: message });
           }
         } else {
@@ -523,15 +485,11 @@
       loadAPIConfig();
       document.getElementById("send-button").addEventListener("click", handleUserInput);
       document.getElementById("chat-input").addEventListener("keypress", function(e) {
-        if (e.key === "Enter") {
-          handleUserInput();
-        }
+        if (e.key === "Enter") { handleUserInput(); }
       });
       window.onclick = function(event) {
         const modal = document.getElementById("api-modal");
-        if (event.target == modal) {
-          closeAPIModal();
-        }
+        if (event.target == modal) { closeAPIModal(); }
       };
       const terminalElements = document.querySelectorAll(".terminal-content p");
       terminalElements.forEach(element => {
@@ -552,9 +510,7 @@
         elements.forEach(element => {
           if (Math.random() > 0.99) {
             element.style.opacity = "0.3";
-            setTimeout(() => {
-              element.style.opacity = "1";
-            }, 100);
+            setTimeout(() => { element.style.opacity = "1"; }, 100);
           }
         });
       }, 100);
