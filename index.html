@@ -1,1099 +1,564 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BioChomps - Mad Science Terminal</title>
-    <style>
-        @font-face {
-            font-family: 'VT323';
-            src: url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
-            font-style: normal;
-            font-weight: 400;
-        }
-        
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden;
-            background-color: #000;
-            font-family: 'VT323', 'Courier New', monospace;
-            color: #33ff33;
-            line-height: 1.4;
-            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="16" viewBox="0 0 12 16"><rect x="0" y="0" width="8" height="16" fill="%2333ff33"/></svg>') 0 0, auto;
-        }
-        
-        .terminal-container {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        
-        /* Fixed scanlines - vertical, top to bottom */
-        .scanlines {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(
-                to bottom,
-                rgba(51, 255, 51, 0.03) 50%,
-                rgba(0, 0, 0, 0.1) 50%
-            );
-            background-size: 100% 4px;
-            pointer-events: none;
-            z-index: 10;
-        }
-        
-        /* Fixed horizontal scan effect - moves from top to bottom */
-        .horizontal-scanline {
-            position: absolute;
-            top: -5%;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background-color: rgba(51, 255, 51, 0.3);
-            opacity: 0.7;
-            box-shadow: 0 0 5px rgba(51, 255, 51, 0.5);
-            z-index: 11;
-            animation: horizontalScan 4s linear infinite;
-            pointer-events: none;
-        }
-        
-        .crt-effect {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.2) 80%, rgba(0, 0, 0, 0.4) 100%);
-            pointer-events: none;
-            z-index: 12;
-        }
-        
-        .terminal-content {
-            height: calc(100% - 40px);
-            overflow-y: auto;
-            padding-right: 10px;
-            position: relative;
-            z-index: 2;
-            scrollbar-width: thin;
-            scrollbar-color: #33ff33 #000;
-        }
-        
-        .terminal-content::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        .terminal-content::-webkit-scrollbar-track {
-            background: #000; 
-        }
-        
-        .terminal-content::-webkit-scrollbar-thumb {
-            background: #33ff33; 
-        }
-        
-        .input-line {
-            display: flex;
-            margin-top: 20px;
-        }
-        
-        .prompt {
-            color: #33ff33;
-            font-weight: bold;
-            margin-right: 8px;
-        }
-        
-        .user-input {
-            flex-grow: 1;
-            background: transparent;
-            border: none;
-            color: #33ff33;
-            font-family: 'VT323', 'Courier New', monospace;
-            font-size: 1em;
-            caret-color: #33ff33;
-            outline: none;
-        }
-        
-        .game-header {
-            text-align: center;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
-        
-        .ascii-art {
-            white-space: pre;
-            line-height: 1.2;
-            text-align: center;
-            margin: 20px 0;
-        }
-        
-        .status-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background-color: #000;
-            border-top: 1px solid #33ff33;
-            padding: 5px 20px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.9em;
-            z-index: 5;
-        }
-        
-        .game-phase {
-            display: none;
-        }
-        
-        .game-phase.active {
-            display: block;
-        }
-        
-        .button {
-            background-color: #000;
-            color: #33ff33;
-            border: 1px solid #33ff33;
-            padding: 5px 10px;
-            margin: 5px;
-            cursor: pointer;
-            font-family: 'VT323', 'Courier New', monospace;
-        }
-        
-        .button:hover {
-            background-color: #33ff33;
-            color: #000;
-        }
-        
-        .flicker {
-            animation: textFlicker 5s infinite;
-        }
-        
-        .gameitem {
-            border: 1px solid #33ff33;
-            padding: 10px;
-            margin: 10px 0;
-        }
-        
-        .part-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 10px;
-        }
-        
-        @keyframes textFlicker {
-            0% { opacity: 1; }
-            92% { opacity: 1; }
-            93% { opacity: 0.3; }
-            94% { opacity: 1; }
-            97% { opacity: 0.5; }
-            98% { opacity: 1; }
-            100% { opacity: 1; }
-        }
-        
-        /* Fixed animation for the horizontal scanline */
-        @keyframes horizontalScan {
-            0% { top: -5%; }
-            80% { top: 105%; }
-            100% { top: 105%; }
-        }
-        
-        /* Screen startup animation */
-        .terminal-container::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #000;
-            z-index: 100;
-            animation: startup 2s ease-out forwards;
-        }
-        
-        @keyframes startup {
-            0% { height: 100%; }
-            90% { height: 5px; }
-            100% { height: 0; }
-        }
-        
-        /* Different screen phases styling */
-        .science-phase .terminal-content {
-            background: linear-gradient(rgba(0, 20, 0, 0.2), rgba(0, 15, 0, 0.1));
-        }
-        
-        .download-phase .terminal-content {
-            background: linear-gradient(rgba(0, 20, 20, 0.2), rgba(0, 15, 0, 0.1));
-        }
-        
-        .mission-phase .terminal-content {
-            background: linear-gradient(rgba(20, 20, 0, 0.2), rgba(0, 15, 0, 0.1));
-        }
-        
-        .battle-mode .terminal-content {
-            background: linear-gradient(rgba(20, 0, 0, 0.2), rgba(0, 15, 0, 0.1));
-        }
-        
-        /* Battle styling */
-        .battle-arena {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        
-        .battle-creatures {
-            display: flex;
-            justify-content: space-between;
-            margin: 20px 0;
-        }
-        
-        .battle-creature {
-            text-align: center;
-            width: 45%;
-        }
-        
-        .health-bar {
-            height: 20px;
-            border: 1px solid #33ff33;
-            margin: 10px 0;
-            position: relative;
-        }
-        
-        .health-bar-fill {
-            height: 100%;
-            background-color: #33ff33;
-            transition: width 0.5s ease-in-out;
-        }
-        
-        .battle-log {
-            border: 1px solid #33ff33;
-            padding: 10px;
-            height: 150px;
-            overflow-y: auto;
-            margin-bottom: 10px;
-        }
-        
-        .ability-buttons {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        /* Lab-Crawl styling */
-        .lab-crawl-narrative {
-            border: 1px solid #33ff33;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .lab-crawl-choices {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        /* Part styling */
-        .part-item {
-            border: 1px solid #33ff33;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .part-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-        }
-        
-        .part-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 5px;
-        }
-        
-        .part-actions {
-            margin-top: 10px;
-            display: flex;
-            justify-content: flex-end;
-        }
-        
-        /* Rarity colors */
-        .rarity-BASIC {
-            color: #33ff33;
-        }
-        
-        .rarity-ADVANCED {
-            color: #3399ff;
-        }
-        
-        .rarity-ELITE {
-            color: #ff33ff;
-        }
-        
-        /* Subscription banner */
-        .subscription-banner {
-            border: 1px solid #ff33ff;
-            background-color: rgba(255, 51, 255, 0.1);
-            padding: 10px;
-            margin: 10px 0;
-            text-align: center;
-        }
-        
-        /* GPT Integration Styles */
-        #chat-container {
-            display: none;
-            height: 100%;
-            border: 1px solid #33ff33;
-            overflow: hidden;
-            margin-top: 20px;
-        }
-        
-        #chat-messages {
-            height: calc(100% - 60px);
-            overflow-y: auto;
-            padding: 10px;
-            border-bottom: 1px solid #33ff33;
-        }
-        
-        .message {
-            margin-bottom: 15px;
-            padding: 8px;
-            border-radius: 3px;
-            animation: messageAppear 0.3s ease-in;
-        }
-        
-        @keyframes messageAppear {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .user-message {
-            border-left: 3px solid #33ff33;
-            background-color: rgba(51, 255, 51, 0.1);
-        }
-        
-        .bot-message {
-            border-left: 3px solid #ff33ff;
-            background-color: rgba(255, 51, 255, 0.1);
-        }
-        
-        #chat-input-container {
-            display: flex;
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.3);
-        }
-        
-        #chat-input {
-            flex-grow: 1;
-            background-color: rgba(0, 0, 0, 0.5);
-            border: 1px solid #33ff33;
-            color: #33ff33;
-            padding: 8px;
-            font-family: 'VT323', 'Courier New', monospace;
-        }
-        
-        #send-button {
-            background-color: #000;
-            color: #33ff33;
-            border: 1px solid #33ff33;
-            padding: 8px 15px;
-            margin-left: 10px;
-            cursor: pointer;
-            font-family: 'VT323', 'Courier New', monospace;
-        }
-        
-        #send-button:hover {
-            background-color: #33ff33;
-            color: #000;
-        }
-        
-        /* Loading indicator */
-        .typing-indicator {
-            display: none;
-            color: #33ff33;
-            font-style: italic;
-            margin-bottom: 10px;
-            animation: blink 1s infinite;
-        }
-        
-        @keyframes blink {
-            0% { opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { opacity: 0.5; }
-        }
-        
-        /* Game phase for chat interaction */
-        #chat-phase {
-            height: 100%;
-        }
-        
-        /* System message styling */
-        .system-message {
-            color: #ffcc00;
-            text-align: center;
-            margin: 10px 0;
-            font-style: italic;
-        }
-        
-        /* "Thinking" animation */
-        .thinking {
-            display: inline-block;
-            overflow: hidden;
-            animation: ellipsis 1.5s infinite;
-        }
-        
-        @keyframes ellipsis {
-            0% { width: 0; }
-            33% { width: 1em; }
-            66% { width: 2em; }
-            100% { width: 3em; }
-        }
-        
-        /* API Settings Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.8);
-        }
-        
-        .modal-content {
-            background-color: #000;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #33ff33;
-            width: 80%;
-            max-width: 500px;
-            animation: modalAppear 0.3s ease-out;
-        }
-        
-        @keyframes modalAppear {
-            from { opacity: 0; transform: translateY(-50px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .close-modal {
-            color: #33ff33;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        
-        .close-modal:hover {
-            color: #ff33ff;
-        }
-        
-        .api-form label {
-            display: block;
-            margin: 10px 0 5px;
-        }
-        
-        .api-form input, .api-form select {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
-            background-color: #000;
-            border: 1px solid #33ff33;
-            color: #33ff33;
-            font-family: 'VT323', 'Courier New', monospace;
-        }
-        
-        .system-message.error {
-            color: #ff5555;
-        }
-        
-        /* Settings button in status bar */
-        #api-settings-button {
-            background-color: transparent;
-            color: #33ff33;
-            border: none;
-            cursor: pointer;
-            font-family: 'VT323', 'Courier New', monospace;
-            padding: 0 5px;
-        }
-        
-        #api-settings-button:hover {
-            color: #ff33ff;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BioChomps - Mad Science Terminal</title>
+  <style>
+    @font-face {
+      font-family: 'VT323';
+      src: url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+      font-style: normal;
+      font-weight: 400;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000;
+      font-family: 'VT323', 'Courier New', monospace;
+      color: #33ff33;
+      line-height: 1.4;
+      cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="16" viewBox="0 0 12 16"><rect x="0" y="0" width="8" height="16" fill="%2333ff33"/></svg>') 0 0, auto;
+    }
+    .terminal-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    /* Fixed scanlines - vertical, top to bottom */
+    .scanlines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        to bottom,
+        rgba(51, 255, 51, 0.03) 50%,
+        rgba(0, 0, 0, 0.1) 50%
+      );
+      background-size: 100% 4px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    /* Fixed horizontal scan effect - moves from top to bottom */
+    .horizontal-scanline {
+      position: absolute;
+      top: -5%;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background-color: rgba(51, 255, 51, 0.3);
+      opacity: 0.7;
+      box-shadow: 0 0 5px rgba(51, 255, 51, 0.5);
+      z-index: 11;
+      animation: horizontalScan 4s linear infinite;
+      pointer-events: none;
+    }
+    .crt-effect {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.2) 80%, rgba(0, 0, 0, 0.4) 100%);
+      pointer-events: none;
+      z-index: 12;
+    }
+    .terminal-content {
+      height: calc(100% - 40px);
+      overflow-y: auto;
+      padding-right: 10px;
+      position: relative;
+      z-index: 2;
+      scrollbar-width: thin;
+      scrollbar-color: #33ff33 #000;
+    }
+    .terminal-content::-webkit-scrollbar {
+      width: 8px;
+    }
+    .terminal-content::-webkit-scrollbar-track {
+      background: #000;
+    }
+    .terminal-content::-webkit-scrollbar-thumb {
+      background: #33ff33;
+    }
+    .input-line {
+      display: flex;
+      margin-top: 20px;
+    }
+    .prompt {
+      color: #33ff33;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+    .user-input {
+      flex-grow: 1;
+      background: transparent;
+      border: none;
+      color: #33ff33;
+      font-family: 'VT323', 'Courier New', monospace;
+      font-size: 1em;
+      caret-color: #33ff33;
+      outline: none;
+    }
+    .game-header {
+      text-align: center;
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
+    .ascii-art {
+      white-space: pre;
+      line-height: 1.2;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .status-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background-color: #000;
+      border-top: 1px solid #33ff33;
+      padding: 5px 20px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9em;
+      z-index: 5;
+    }
+    .game-phase {
+      display: none;
+    }
+    .game-phase.active {
+      display: block;
+    }
+    .button {
+      background-color: #000;
+      color: #33ff33;
+      border: 1px solid #33ff33;
+      padding: 5px 10px;
+      margin: 5px;
+      cursor: pointer;
+      font-family: 'VT323', 'Courier New', monospace;
+    }
+    .button:hover {
+      background-color: #33ff33;
+      color: #000;
+    }
+    .flicker {
+      animation: textFlicker 5s infinite;
+    }
+    @keyframes textFlicker {
+      0% { opacity: 1; }
+      92% { opacity: 1; }
+      93% { opacity: 0.3; }
+      94% { opacity: 1; }
+      97% { opacity: 0.5; }
+      98% { opacity: 1; }
+      100% { opacity: 1; }
+    }
+    /* Fixed animation for the horizontal scanline */
+    @keyframes horizontalScan {
+      0% { top: -5%; }
+      80% { top: 105%; }
+      100% { top: 105%; }
+    }
+    /* Screen startup animation */
+    .terminal-container::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #000;
+      z-index: 100;
+      animation: startup 2s ease-out forwards;
+    }
+    @keyframes startup {
+      0% { height: 100%; }
+      90% { height: 5px; }
+      100% { height: 0; }
+    }
+    /* GPT Integration Styles for video game phase */
+    #gpt-game-phase {
+      height: 100%;
+    }
+    #gpt-game-phase iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
 </head>
 <body>
-    <div class="terminal-container">
-        <div class="scanlines"></div>
-        <div class="horizontal-scanline"></div>
-        <div class="crt-effect"></div>
-        
-        <div class="terminal-content">
-            <div class="game-header flicker">
-                <div class="ascii-art">
-                    ██████╗ ██╗ ██████╗  ██████╗██╗  ██║ ██████╗ ███╗   ███╗██████╗ ███████╗
-                    ██╔══██╗██║██╔═══██╗██╔════╝██║  ██║██╔═══██╗████╗ ████║██╔══██╗██╔════╝
-                    ██████╔╝██║██║   ██║██║     ███████║██║   ██║██╔████╔██║██████╔╝███████╗
-                    ██╔══██╗██║██║   ██║██║     ██╔══██║██║   ██║██║╚██╔╝██║██╔═══╝ ╚════██║
-                    ██████╔╝██║╚██████╔╝╚██████╗██║  ██║╚██████╔╝██║ ╚═╝ ██║██║     ███████║
-                    ╚═════╝ ╚═╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚══════╝
-                </div>
-                <p>MAD SCIENCE TERMINAL v3.14159</p>
-                <p>SYSTEM BOOTUP... COMPLETE</p>
-                <p>WELCOME TO THE LABORATORY, MAD SCIENTIST!</p>
-            </div>
-            
-            <div id="output"></div>
-            
-            <!-- Start Screen -->
-            <div id="start-screen" class="game-phase active">
-                <p>INITIALIZING BIOCHOMPS PROTOCOL...</p>
-                <p>CREATE YOUR MAD SCIENTIST IDENTITY TO BEGIN:</p>
-                <div class="input-line">
-                    <span class="prompt">NAME:</span>
-                    <input type="text" id="scientist-name" class="user-input" placeholder="Enter your mad scientist name">
-                </div>
-                <div style="margin-top: 20px; text-align: center;">
-                    <button onclick="configureAPI()" class="button">CONFIGURE AI NEURAL LINK</button>
-                    <button onclick="startGame()" class="button">BEGIN EXPERIMENTATION</button>
-                </div>
-            </div>
-            
-            <!-- Chat Phase -->
-            <div id="chat-phase" class="game-phase">
-                <div id="chat-container">
-                    <div id="chat-messages">
-                        <div class="system-message">
-                            * BioChomps AI System initialized *
-                        </div>
-                        <div class="bot-message">
-                            Greetings, mad scientist! I am the BioChomps AI system, ready to assist with your genetic experimentation and creature battles. What sinister plans shall we execute today?
-                        </div>
-                        <div class="typing-indicator" id="typing-indicator">
-                            BioChomps AI thinking<span class="thinking">...</span>
-                        </div>
-                    </div>
-                    <div id="chat-input-container">
-                        <input type="text" id="chat-input" placeholder="Enter your command, professor..." autocomplete="off">
-                        <button id="send-button">TRANSMIT</button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Status Bar -->
-            <div class="status-bar">
-                <div id="user-info">USER: [UNDEFINED]</div>
-                <div id="system-info">
-                    SYSTEM: <span id="system-status">STANDBY</span>
-                    <button id="api-settings-button" onclick="configureAPI()">⚙️</button>
-                </div>
-            </div>
+  <div class="terminal-container">
+    <div class="scanlines"></div>
+    <div class="horizontal-scanline"></div>
+    <div class="crt-effect"></div>
+
+    <div class="terminal-content">
+      <div class="game-header flicker">
+        <div class="ascii-art">
+          ██████╗ ██╗ ██████╗  ██████╗██╗  ██║ ██████╗ ███╗   ███╗██████╗ ███████╗
+          ██╔══██╗██║██╔═══██╗██╔════╝██║  ██║██╔═══██╗████╗ ████║██╔══██╗██╔════╝
+          ██████╔╝██║██║   ██║██║     ███████║██║   ██║██╔████╔██║██████╔╝███████╗
+          ██╔══██╗██║██║   ██║██║     ██╔══██║██║   ██║██║╚██╔╝██║██╔═══╝ ╚════██║
+          ██████╔╝██║╚██████╔╝╚██████╗██║  ██║╚██████╔╝██║ ╚═╝ ██║██║     ███████║
+          ╚═════╝ ╚═╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚══════╝
         </div>
-    </div>
-    
-    <!-- API Configuration Modal -->
-    <div id="api-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="closeAPIModal()">&times;</span>
-            <h2 style="text-align: center; color: #33ff33;">NEURAL LINK CONFIGURATION</h2>
-            <form id="api-form" class="api-form">
-                <label for="api-key">API KEY:</label>
-                <input type="password" id="api-key" placeholder="Enter your OpenAI API key">
-                
-                <label for="api-model">AI MODEL:</label>
-                <select id="api-model">
-                    <option value="gpt-4-turbo">GPT-4 Turbo (Recommended)</option>
-                    <option value="gpt-4">GPT-4</option>
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster)</option>
-                </select>
-                
-                <label for="system-prompt">SYSTEM INITIALIZATION:</label>
-                <input type="text" id="system-prompt" value="You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language.">
-                
-                <div style="text-align: center; margin-top: 20px;">
-                    <button type="button" onclick="saveAPIConfig()" class="button">INITIALIZE NEURAL LINK</button>
-                </div>
-            </form>
+        <p>MAD SCIENCE TERMINAL v3.14159</p>
+        <p>SYSTEM BOOTUP... COMPLETE</p>
+        <p>WELCOME TO THE LABORATORY, MAD SCIENTIST!</p>
+      </div>
+
+      <!-- Start Screen -->
+      <div id="start-screen" class="game-phase active">
+        <p>INITIALIZING BIOCHOMPS PROTOCOL...</p>
+        <p>CREATE YOUR MAD SCIENTIST IDENTITY TO BEGIN:</p>
+        <div class="input-line">
+          <span class="prompt">NAME:</span>
+          <input type="text" id="scientist-name" class="user-input" placeholder="Enter your mad scientist name">
         </div>
+        <div style="margin-top: 20px; text-align: center;">
+          <button onclick="configureAPI()" class="button">CONFIGURE AI NEURAL LINK</button>
+          <button onclick="startGame()" class="button">BEGIN EXPERIMENTATION</button>
+          <button onclick="startGptGame()" class="button">LAUNCH GPT VIDEO GAME</button>
+        </div>
+      </div>
+
+      <!-- Chat Phase (existing GPT chat interface) -->
+      <div id="chat-phase" class="game-phase">
+        <div id="chat-container">
+          <div id="chat-messages">
+            <div class="system-message">
+              * BioChomps AI System initialized *
+            </div>
+            <div class="bot-message">
+              Greetings, mad scientist! I am the BioChomps AI system, ready to assist with your genetic experimentation and creature battles. What sinister plans shall we execute today?
+            </div>
+            <div class="typing-indicator" id="typing-indicator">
+              BioChomps AI thinking<span class="thinking">...</span>
+            </div>
+          </div>
+          <div id="chat-input-container">
+            <input type="text" id="chat-input" placeholder="Enter your command, professor..." autocomplete="off">
+            <button id="send-button">TRANSMIT</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- GPT Video Game Phase -->
+      <div id="gpt-game-phase" class="game-phase">
+        <iframe id="gpt-iframe" src="https://chatgpt.com/g/g-67d5d8be96288191a9279ca0606ce1d9-biochomps-v1-1"></iframe>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="status-bar">
+        <div id="user-info">USER: [UNDEFINED]</div>
+        <div id="system-info">
+          SYSTEM: <span id="system-status">STANDBY</span>
+          <button id="api-settings-button" onclick="configureAPI()">⚙️</button>
+        </div>
+      </div>
     </div>
-    
-    <script>
-        // Variables to manage the chat interface and API
-        let scientistName = "";
-        let conversationHistory = [];
-        let messageQueue = [];
-        let processingMessage = false;
-        let apiConfig = {
-            key: "",
-            model: "gpt-4-turbo",
-            systemPrompt: "You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language."
-        };
-        
-        // Check for saved API configuration
-        function loadAPIConfig() {
-            const savedConfig = localStorage.getItem('biochompsApiConfig');
-            if (savedConfig) {
-                try {
-                    const parsedConfig = JSON.parse(savedConfig);
-                    apiConfig = { ...apiConfig, ...parsedConfig };
-                    updateSystemStatus("API CONFIGURED");
-                } catch (error) {
-                    console.error("Error loading API config:", error);
-                }
-            }
+  </div>
+
+  <!-- API Configuration Modal -->
+  <div id="api-modal" class="modal">
+    <div class="modal-content">
+      <span class="close-modal" onclick="closeAPIModal()">&times;</span>
+      <h2 style="text-align: center; color: #33ff33;">NEURAL LINK CONFIGURATION</h2>
+      <form id="api-form" class="api-form">
+        <label for="api-key">API KEY:</label>
+        <input type="password" id="api-key" placeholder="Enter your OpenAI API key">
+        <label for="api-model">AI MODEL:</label>
+        <select id="api-model">
+          <option value="gpt-4-turbo">GPT-4 Turbo (Recommended)</option>
+          <option value="gpt-4">GPT-4</option>
+          <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster)</option>
+        </select>
+        <label for="system-prompt">SYSTEM INITIALIZATION:</label>
+        <input type="text" id="system-prompt" value="You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language.">
+        <div style="text-align: center; margin-top: 20px;">
+          <button type="button" onclick="saveAPIConfig()" class="button">INITIALIZE NEURAL LINK</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Variables to manage the chat interface and API
+    let scientistName = "";
+    let conversationHistory = [];
+    let messageQueue = [];
+    let processingMessage = false;
+    let apiConfig = {
+      key: "",
+      model: "gpt-4-turbo",
+      systemPrompt: "You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language."
+    };
+
+    // Check for saved API configuration
+    function loadAPIConfig() {
+      const savedConfig = localStorage.getItem('biochompsApiConfig');
+      if (savedConfig) {
+        try {
+          const parsedConfig = JSON.parse(savedConfig);
+          apiConfig = { ...apiConfig, ...parsedConfig };
+          updateSystemStatus("API CONFIGURED");
+        } catch (error) {
+          console.error("Error loading API config:", error);
         }
-        
-        // Open API configuration modal
-        function configureAPI() {
-            const modal = document.getElementById("api-modal");
-            const apiKeyInput = document.getElementById("api-key");
-            const apiModelSelect = document.getElementById("api-model");
-            const systemPromptInput = document.getElementById("system-prompt");
-            
-            // Pre-fill with current values
-            apiKeyInput.value = apiConfig.key || "";
-            apiModelSelect.value = apiConfig.model || "gpt-4-turbo";
-            systemPromptInput.value = apiConfig.systemPrompt || "You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language.";
-            
-            modal.style.display = "block";
+      }
+    }
+
+    // Open API configuration modal
+    function configureAPI() {
+      const modal = document.getElementById("api-modal");
+      const apiKeyInput = document.getElementById("api-key");
+      const apiModelSelect = document.getElementById("api-model");
+      const systemPromptInput = document.getElementById("system-prompt");
+      apiKeyInput.value = apiConfig.key || "";
+      apiModelSelect.value = apiConfig.model || "gpt-4-turbo";
+      systemPromptInput.value = apiConfig.systemPrompt || "You are the BioChomps AI, an assistant for a mad scientist game. Respond in character as an AI helping with genetic experiments and creature battles. Use scientific and slightly ominous language.";
+      modal.style.display = "block";
+    }
+
+    // Close API configuration modal
+    function closeAPIModal() {
+      document.getElementById("api-modal").style.display = "none";
+    }
+
+    // Save API configuration
+    function saveAPIConfig() {
+      const apiKey = document.getElementById("api-key").value.trim();
+      const apiModel = document.getElementById("api-model").value;
+      const systemPrompt = document.getElementById("system-prompt").value.trim();
+      if (!apiKey) {
+        alert("API Key is required for neural link connection!");
+        return;
+      }
+      apiConfig = {
+        key: apiKey,
+        model: apiModel,
+        systemPrompt: systemPrompt
+      };
+      localStorage.setItem('biochompsApiConfig', JSON.stringify(apiConfig));
+      updateSystemStatus("API CONFIGURED");
+      closeAPIModal();
+      addSystemMessage("Neural link configured successfully. Ready for mad science!");
+    }
+
+    // Update system status in UI
+    function updateSystemStatus(status) {
+      document.getElementById("system-status").textContent = status;
+    }
+
+    // Function to handle game start (for chat mode)
+    function startGame() {
+      scientistName = document.getElementById("scientist-name").value.trim();
+      if (!scientistName) {
+        scientistName = "Dr. Unknown";
+      }
+      if (!apiConfig.key) {
+        addSystemMessage("WARNING: Neural link not configured. Please configure the API connection first.", true);
+        configureAPI();
+        return;
+      }
+      document.getElementById("user-info").textContent = `USER: DR. ${scientistName.toUpperCase()}`;
+      document.getElementById("start-screen").classList.remove("active");
+      document.getElementById("chat-phase").classList.add("active");
+      document.getElementById("chat-container").style.display = "block";
+      conversationHistory = [
+        { role: "system", content: apiConfig.systemPrompt + ` Address the user as Dr. ${scientistName}.` }
+      ];
+      document.getElementById("chat-input").focus();
+      callGptAPI(`Welcome Dr. ${scientistName} to the laboratory. Describe what I can do as a mad scientist in BioChomps.`, true);
+      updateSystemStatus("ONLINE");
+    }
+
+    // Function to launch the GPT video game mode (iframe integration)
+    function startGptGame() {
+      scientistName = document.getElementById("scientist-name").value.trim();
+      if (!scientistName) {
+        scientistName = "Dr. Unknown";
+      }
+      document.getElementById("user-info").textContent = `USER: DR. ${scientistName.toUpperCase()}`;
+      // Hide start screen and chat-phase (if visible)
+      document.getElementById("start-screen").classList.remove("active");
+      document.getElementById("chat-phase").classList.remove("active");
+      // Show the GPT video game phase
+      document.getElementById("gpt-game-phase").classList.add("active");
+    }
+
+    // Functions to add messages and process chat (existing functionality)
+    function addSystemMessage(text, isError = false) {
+      const chatMessages = document.getElementById("chat-messages");
+      const messageDiv = document.createElement("div");
+      messageDiv.classList.add("system-message");
+      if (isError) {
+        messageDiv.classList.add("error");
+      }
+      messageDiv.textContent = `* ${text} *`;
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function addUserMessage(text) {
+      const chatMessages = document.getElementById("chat-messages");
+      const messageDiv = document.createElement("div");
+      messageDiv.classList.add("message", "user-message");
+      messageDiv.textContent = text;
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      if (!text.startsWith("Welcome Dr.")) {
+        conversationHistory.push({ role: "user", content: text });
+      }
+    }
+
+    function addBotMessage(text) {
+      const chatMessages = document.getElementById("chat-messages");
+      const messageDiv = document.createElement("div");
+      messageDiv.classList.add("message", "bot-message");
+      messageDiv.textContent = text;
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      conversationHistory.push({ role: "assistant", content: text });
+    }
+
+    function handleUserInput() {
+      const inputField = document.getElementById("chat-input");
+      const userInput = inputField.value.trim();
+      if (userInput === "") return;
+      addUserMessage(userInput);
+      inputField.value = "";
+      messageQueue.push(userInput);
+      if (!processingMessage) {
+        processMessageQueue();
+      }
+    }
+
+    async function processMessageQueue() {
+      if (messageQueue.length === 0) {
+        processingMessage = false;
+        return;
+      }
+      processingMessage = true;
+      const message = messageQueue.shift();
+      document.getElementById("typing-indicator").style.display = "block";
+      await callGptAPI(message);
+      document.getElementById("typing-indicator").style.display = "none";
+      setTimeout(() => {
+        processMessageQueue();
+      }, 500);
+    }
+
+    async function callGptAPI(message, isHidden = false) {
+      updateSystemStatus("PROCESSING");
+      if (!isHidden) {
+        document.getElementById("typing-indicator").style.display = "block";
+      }
+      try {
+        const messages = [...conversationHistory];
+        if (!isHidden) {
+          if (messages[messages.length - 1]?.role !== "user" || 
+              messages[messages.length - 1]?.content !== message) {
+            messages.push({ role: "user", content: message });
+          }
+        } else {
+          messages.push({ role: "user", content: message });
         }
-        
-        // Close API configuration modal
-        function closeAPIModal() {
-            document.getElementById("api-modal").style.display = "none";
-        }
-        
-        // Save API configuration
-        function saveAPIConfig() {
-            const apiKey = document.getElementById("api-key").value.trim();
-            const apiModel = document.getElementById("api-model").value;
-            const systemPrompt = document.getElementById("system-prompt").value.trim();
-            
-            if (!apiKey) {
-                alert("API Key is required for neural link connection!");
-                return;
-            }
-            
-            apiConfig = {
-                key: apiKey,
-                model: apiModel,
-                systemPrompt: systemPrompt
-            };
-            
-            // Save to localStorage (encrypt in a real app)
-            localStorage.setItem('biochompsApiConfig', JSON.stringify(apiConfig));
-            
-            updateSystemStatus("API CONFIGURED");
-            closeAPIModal();
-            
-            addSystemMessage("Neural link configured successfully. Ready for mad science!");
-        }
-        
-        // Update system status in UI
-        function updateSystemStatus(status) {
-            document.getElementById("system-status").textContent = status;
-        }
-        
-        // Function to handle game start
-        function startGame() {
-            scientistName = document.getElementById("scientist-name").value.trim();
-            if (!scientistName) {
-                scientistName = "Dr. Unknown";
-            }
-            
-            // Check if API is configured
-            if (!apiConfig.key) {
-                addSystemMessage("WARNING: Neural link not configured. Please configure the API connection first.", true);
-                configureAPI();
-                return;
-            }
-            
-            // Update UI with scientist name
-            document.getElementById("user-info").textContent = `USER: DR. ${scientistName.toUpperCase()}`;
-            
-            // Hide start screen and show chat interface
-            document.getElementById("start-screen").classList.remove("active");
-            document.getElementById("chat-phase").classList.add("active");
-            document.getElementById("chat-container").style.display = "block";
-            
-            // Initialize the conversation with system prompt
-            conversationHistory = [
-                { role: "system", content: apiConfig.systemPrompt + ` Address the user as Dr. ${scientistName}.` }
-            ];
-            
-            // Focus on chat input
-            document.getElementById("chat-input").focus();
-            
-            // Send initial API request to get welcome message
-            callGptAPI(`Welcome Dr. ${scientistName} to the laboratory. Describe what I can do as a mad scientist in BioChomps.`, true);
-            
-            updateSystemStatus("ONLINE");
-        }
-        
-        // Function to add a system message to the chat
-        function addSystemMessage(text, isError = false) {
-            const chatMessages = document.getElementById("chat-messages");
-            const messageDiv = document.createElement("div");
-            messageDiv.classList.add("system-message");
-            if (isError) {
-                messageDiv.classList.add("error");
-            }
-            messageDiv.textContent = `* ${text} *`;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-        
-        // Function to add a user message to the chat
-        function addUserMessage(text) {
-            const chatMessages = document.getElementById("chat-messages");
-            const messageDiv = document.createElement("div");
-            messageDiv.classList.add("message", "user-message");
-            messageDiv.textContent = text;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            
-            // Store in conversation history (skip if it's the initial hidden prompt)
-            if (!text.startsWith("Welcome Dr.")) {
-                conversationHistory.push({ role: "user", content: text });
-            }
-        }
-        
-        // Function to add a bot message to the chat
-        function addBotMessage(text) {
-            const chatMessages = document.getElementById("chat-messages");
-            const messageDiv = document.createElement("div");
-            messageDiv.classList.add("message", "bot-message");
-            messageDiv.textContent = text;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            
-            // Store in conversation history
-            conversationHistory.push({ role: "assistant", content: text });
-        }
-        
-        // Function to handle user input
-        function handleUserInput() {
-            const inputField = document.getElementById("chat-input");
-            const userInput = inputField.value.trim();
-            
-            if (userInput === "") return; // Don't process empty messages
-            
-            // Add user message to chat
-            addUserMessage(userInput);
-            
-            // Clear input field
-            inputField.value = "";
-            
-            // Queue the message for processing
-            messageQueue.push(userInput);
-            
-            // Process the queue if not already processing a message
-            if (!processingMessage) {
-                processMessageQueue();
-            }
-        }
-        
-        // Function to process the message queue
-        async function processMessageQueue() {
-            if (messageQueue.length === 0) {
-                processingMessage = false;
-                return;
-            }
-            
-            processingMessage = true;
-            const message = messageQueue.shift();
-            
-            // Show typing indicator
-            document.getElementById("typing-indicator").style.display = "block";
-            
-            // Call the GPT API
-            await callGptAPI(message);
-            
-            // Hide typing indicator
-            document.getElementById("typing-indicator").style.display = "none";
-            
-            // Process next message in queue
-            setTimeout(() => {
-                processMessageQueue();
-            }, 500);
-        }
-        
-        // Function to call the GPT API
-        async function callGptAPI(message, isHidden = false) {
-            updateSystemStatus("PROCESSING");
-            
-            if (!isHidden) {
-                // Show thinking indicator for user-visible messages
-                document.getElementById("typing-indicator").style.display = "block";
-            }
-            
-            try {
-                // Create the messages array for the API call
-                const messages = [...conversationHistory];
-                
-                // Add the current message if it's not already in the history
-                if (!isHidden) {
-                    if (messages[messages.length - 1]?.role !== "user" || 
-                        messages[messages.length - 1]?.content !== message) {
-                        messages.push({ role: "user", content: message });
-                    }
-                } else {
-                    // For hidden messages (like the welcome message), add it but don't show in UI
-                    messages.push({ role: "user", content: message });
-                }
-                
-                // Make the API call
-                const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiConfig.key}`
-                    },
-body: JSON.stringify({
-                        model: apiConfig.model,
-                        messages: messages,
-                        temperature: 0.7,
-                        max_tokens: 1000
-                    })
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error?.message || 'API request failed');
-                }
-                
-                const data = await response.json();
-                const aiResponse = data.choices[0]?.message?.content || "ERROR: No response generated.";
-                
-                // Add to conversation history if it's not the initial hidden prompt
-                if (!isHidden) {
-                    addBotMessage(aiResponse);
-                } else {
-                    // For the welcome message, we still show it in the UI but mark it differently in history
-                    const firstBotMessage = document.querySelector('.bot-message');
-                    if (firstBotMessage) {
-                        firstBotMessage.textContent = aiResponse;
-                    } else {
-                        addBotMessage(aiResponse);
-                    }
-                }
-                
-                updateSystemStatus("ONLINE");
-                return aiResponse;
-                    
-            } catch (error) {
-                console.error("API Error:", error);
-                updateSystemStatus("ERROR");
-                addSystemMessage(`Neural link error: ${error.message}`, true);
-                
-                // Fallback response
-                const fallbackResponse = "SYSTEM ERROR: Neural link disrupted. Please check configuration and try again.";
-                if (!isHidden) {
-                    addBotMessage(fallbackResponse);
-                }
-                
-                return fallbackResponse;
-            } finally {
-                document.getElementById("typing-indicator").style.display = "none";
-            }
-        }
-        
-        // Function to implement stream response from GPT API (optional enhancement)
-        async function streamGptResponse(message) {
-            updateSystemStatus("PROCESSING");
-            document.getElementById("typing-indicator").style.display = "block";
-            
-            try {
-                // Create message for streaming response
-                const messages = [...conversationHistory];
-                messages.push({ role: "user", content: message });
-                
-                const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiConfig.key}`
-                    },
-                    body: JSON.stringify({
-                        model: apiConfig.model,
-                        messages: messages,
-                        temperature: 0.7,
-                        max_tokens: 1000,
-                        stream: true
-                    })
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error?.message || 'API request failed');
-                }
-                
-                // Create new message div for streaming response
-                const chatMessages = document.getElementById("chat-messages");
-                const messageDiv = document.createElement("div");
-                messageDiv.classList.add("message", "bot-message");
-                messageDiv.textContent = "";
-                chatMessages.appendChild(messageDiv);
-                
-                // Hide typing indicator as we'll show text streaming in
-                document.getElementById("typing-indicator").style.display = "none";
-                
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder("utf-8");
-                let responseText = "";
-                
-                // Function to process stream
-                async function readStream() {
-                    try {
-                        while (true) {
-                            const { done, value } = await reader.read();
-                            
-                            if (done) {
-                                break;
-                            }
-                            
-                            // Process the chunk of data
-                            const chunk = decoder.decode(value);
-                            const lines = chunk.split('\n').filter(line => line.trim() !== '');
-                            
-                            for (const line of lines) {
-                                if (line.startsWith('data:')) {
-                                    const dataLine = line.slice(5).trim();
-                                    
-                                    if (dataLine === '[DONE]') {
-                                        continue;
-                                    }
-                                    
-                                    try {
-                                        const data = JSON.parse(dataLine);
-                                        const contentDelta = data.choices[0]?.delta?.content;
-                                        
-                                        if (contentDelta) {
-                                            responseText += contentDelta;
-                                            messageDiv.textContent = responseText;
-                                            chatMessages.scrollTop = chatMessages.scrollHeight;
-                                        }
-                                    } catch (e) {
-                                        console.error("Error parsing stream data:", e);
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Add complete response to conversation history
-                        conversationHistory.push({ role: "assistant", content: responseText });
-                        updateSystemStatus("ONLINE");
-                        
-                    } catch (error) {
-                        console.error("Stream reading error:", error);
-                        messageDiv.textContent += "\n[TRANSMISSION INTERRUPTED]";
-                        updateSystemStatus("ERROR");
-                    }
-                }
-                
-                // Start reading the stream
-                await readStream();
-                
-            } catch (error) {
-                console.error("Streaming API Error:", error);
-                updateSystemStatus("ERROR");
-                addSystemMessage(`Neural link error: ${error.message}`, true);
-                addBotMessage("SYSTEM ERROR: Neural link disrupted. Please check configuration and try again.");
-            }
-        }
-        
-        // Function to test the API connection
-        async function testApiConnection() {
-            if (!apiConfig.key) {
-                addSystemMessage("Cannot test connection: API key not configured", true);
-                return false;
-            }
-            
-            try {
-                updateSystemStatus("TESTING");
-                
-                const response = await fetch('https://api.openai.com/v1/models', {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${apiConfig.key}`
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`API connection failed: ${response.status}`);
-                }
-                
-                updateSystemStatus("READY");
-                return true;
-                
-            } catch (error) {
-                console.error("API Connection Test Error:", error);
-                updateSystemStatus("ERROR");
-                addSystemMessage(`API connection test failed: ${error.message}`, true);
-                return false;
-            }
-        }
-        
-        // Load API configuration when page loads
-        document.addEventListener("DOMContentLoaded", function() {
-            // Load saved API configuration
-            loadAPIConfig();
-            
-            // Set up the send button click event
-            document.getElementById("send-button").addEventListener("click", handleUserInput);
-            
-            // Set up enter key press event
-            document.getElementById("chat-input").addEventListener("keypress", function(e) {
-                if (e.key === "Enter") {
-                    handleUserInput();
-                }
-            });
-            
-            // Close modal when clicking outside of it
-            window.onclick = function(event) {
-                const modal = document.getElementById("api-modal");
-                if (event.target == modal) {
-                    closeAPIModal();
-                }
-            };
-            
-            // Add realistic terminal typing effects
-            const terminalElements = document.querySelectorAll(".terminal-content p");
-            terminalElements.forEach(element => {
-                const originalText = element.textContent;
-                element.textContent = "";
-                
-                let i = 0;
-                const typing = setInterval(() => {
-                    if (i < originalText.length) {
-                        element.textContent += originalText.charAt(i);
-                        i++;
-                    } else {
-                        clearInterval(typing);
-                    }
-                }, 30);
-            });
-            
-            // Set random flicker effect for some elements
-            setInterval(() => {
-                const elements = document.querySelectorAll(".flicker");
-                elements.forEach(element => {
-                    if (Math.random() > 0.99) {
-                        element.style.opacity = "0.3";
-                        setTimeout(() => {
-                            element.style.opacity = "1";
-                        }, 100);
-                    }
-                });
-            }, 100);
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiConfig.key}`
+          },
+          body: JSON.stringify({
+            model: apiConfig.model,
+            messages: messages,
+            temperature: 0.7,
+            max_tokens: 1000
+          })
         });
-    </script>
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || 'API request failed');
+        }
+        const data = await response.json();
+        const aiResponse = data.choices[0]?.message?.content || "ERROR: No response generated.";
+        if (!isHidden) {
+          addBotMessage(aiResponse);
+        } else {
+          const firstBotMessage = document.querySelector('.bot-message');
+          if (firstBotMessage) {
+            firstBotMessage.textContent = aiResponse;
+          } else {
+            addBotMessage(aiResponse);
+          }
+        }
+        updateSystemStatus("ONLINE");
+        return aiResponse;
+      } catch (error) {
+        console.error("API Error:", error);
+        updateSystemStatus("ERROR");
+        addSystemMessage(`Neural link error: ${error.message}`, true);
+        const fallbackResponse = "SYSTEM ERROR: Neural link disrupted. Please check configuration and try again.";
+        if (!isHidden) {
+          addBotMessage(fallbackResponse);
+        }
+        return fallbackResponse;
+      } finally {
+        document.getElementById("typing-indicator").style.display = "none";
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+      loadAPIConfig();
+      document.getElementById("send-button").addEventListener("click", handleUserInput);
+      document.getElementById("chat-input").addEventListener("keypress", function(e) {
+        if (e.key === "Enter") {
+          handleUserInput();
+        }
+      });
+      window.onclick = function(event) {
+        const modal = document.getElementById("api-modal");
+        if (event.target == modal) {
+          closeAPIModal();
+        }
+      };
+      const terminalElements = document.querySelectorAll(".terminal-content p");
+      terminalElements.forEach(element => {
+        const originalText = element.textContent;
+        element.textContent = "";
+        let i = 0;
+        const typing = setInterval(() => {
+          if (i < originalText.length) {
+            element.textContent += originalText.charAt(i);
+            i++;
+          } else {
+            clearInterval(typing);
+          }
+        }, 30);
+      });
+      setInterval(() => {
+        const elements = document.querySelectorAll(".flicker");
+        elements.forEach(element => {
+          if (Math.random() > 0.99) {
+            element.style.opacity = "0.3";
+            setTimeout(() => {
+              element.style.opacity = "1";
+            }, 100);
+          }
+        });
+      }, 100);
+    });
+  </script>
 </body>
 </html>
